@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.routers import catalog, evidence
+from app.routers import analysis, catalog, evidence
 
 logger = logging.getLogger("cancerbiomap")
 
@@ -22,12 +22,12 @@ biomarker-cancer association.
 they are not probabilities of clinical validity and do not indicate clinical approval.*
 """
 
-app = FastAPI(title="CancerBioMap API", version="1.0.0", description=DESCRIPTION)
+app = FastAPI(title="CancerBioMap API", version="1.1.0", description=DESCRIPTION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-Admin-Token"],
 )
 
 
@@ -64,3 +64,4 @@ def health():
 
 app.include_router(catalog.router)
 app.include_router(evidence.router)
+app.include_router(analysis.router)

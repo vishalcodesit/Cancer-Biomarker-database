@@ -14,18 +14,17 @@ Respects NCBI usage policy: batches of up to 200 IDs, <= 3 requests/second
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 import time
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.config import get_settings  # noqa: E402
+from scripts._http import request  # noqa: E402  (certifi trust store; see scripts/_http.py)
 
 ESUMMARY = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 DEFAULT_CSV = Path(__file__).resolve().parent.parent / "data" / "sample" / "publications.csv"
@@ -46,8 +45,7 @@ def fetch_summaries(pmids: list[str]) -> dict[str, dict]:
         if settings.ncbi_api_key:
             params["api_key"] = settings.ncbi_api_key
         url = f"{ESUMMARY}?{urllib.parse.urlencode(params)}"
-        with urllib.request.urlopen(url, timeout=30) as resp:
-            result = json.load(resp)["result"]
+        result = request(url)["result"]
         for pmid in batch:
             if pmid in result and "error" not in result[pmid]:
                 out[pmid] = result[pmid]
@@ -104,7 +102,7 @@ def main() -> int:
 
     print(f"\nChecked {len(df)} publications; {len(records)} found in PubMed; {problems} discrepancies.")
     if args.write:
-        pd.DataFrame(rows).to_csv(args.csv, index=False)
+        pd.DataFrame(rows).to_csv(args.csv, index=False, lineterminator="\n")
         print(f"Wrote enriched metadata to {args.csv}")
     return 1 if problems else 0
 

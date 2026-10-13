@@ -1,0 +1,6 @@
+study_id,name,cancer_code,source_name,n_samples_mutation,n_samples_cna,citation,source_url,retrieved_at
+brca_tcga_pan_can_atlas_2018,"Breast Invasive Carcinoma (TCGA, PanCancer Atlas)",breast,cBioPortal,1066,1070,"TCGA, Cell 2018",https://www.cbioportal.org/study/summary?id=brca_tcga_pan_can_atlas_2018,2026-10-13
+luad_tcga_pan_can_atlas_2018,"Lung Adenocarcinoma (TCGA, PanCancer Atlas)",nsclc,cBioPortal,566,511,"TCGA, Cell 2018",https://www.cbioportal.org/study/summary?id=luad_tcga_pan_can_atlas_2018,2026-10-13
+lusc_tcga_pan_can_atlas_2018,"Lung Squamous Cell Carcinoma (TCGA, PanCancer Atlas)",nsclc,cBioPortal,484,487,"TCGA, Cell 2018",https://www.cbioportal.org/study/summary?id=lusc_tcga_pan_can_atlas_2018,2026-10-13
+coadread_tcga_pan_can_atlas_2018,"Colorectal Adenocarcinoma (TCGA, PanCancer Atlas)",colorectal,cBioPortal,534,592,"TCGA, Cell 2018",https://www.cbioportal.org/study/summary?id=coadread_tcga_pan_can_atlas_2018,2026-10-13
+prad_tcga_pan_can_atlas_2018,"Prostate Adenocarcinoma (TCGA, PanCancer Atlas)",prostate,cBioPortal,494,489,"TCGA, Cell 2018",https://www.cbioportal.org/study/summary?id=prad_tcga_pan_can_atlas_2018,2026-10-13

@@ -6,18 +6,21 @@ import { Card, PageHeader, Select, Table } from "../components/ui";
 import { useApi } from "../lib/useApi";
 
 const COLUMNS: Record<string, string> = {
-  cancers: "code, name, tissue_origin, cancer_category, external_identifier, gdc_project_id, description",
-  genes: "official_symbol, full_name, organism, ncbi_gene_id, description",
+  cancers: "code, name, tissue_origin, cancer_category, external_identifier, mondo_id, icdo_topography, gdc_project_id, description",
+  genes: "official_symbol, full_name, organism, ncbi_gene_id, hgnc_id, description",
   proteins: "accession, name, function, organism, gene_symbol",
   pathways: "pathway_database, external_identifier, pathway_name, description, source_url",
   publications: "pmid, doi, title, authors, publication_year, journal, source_url",
-  biomarkers: "biomarker_code, name, biomarker_type, gene_symbols (; separated), description, biological_function, external_identifier",
+  biomarkers: "biomarker_code, name, biomarker_type, gene_symbols (; separated), prevalence_basis, description, biological_function, external_identifier",
   gene_pathways: "gene_symbol, pathway_database, external_identifier, annotation_source",
   biomarker_pathways: "biomarker_code, pathway_database, external_identifier, annotation_source",
   associations: "biomarker_code, cancer_code, biomarker_role, source_status, association_description",
   evidence: "biomarker_code, cancer_code, biomarker_role, pmid, evidence_type, source_name, source_record_id, consistency_annotation, retrieved_at, source_url, evidence_summary",
   evidence_kegg: "same columns as evidence",
   variants: "variant_identifier, gene_symbol, protein_change, dbsnp_id, genome_assembly, chromosome, position, reference_allele, alternate_allele, clinical_or_research_annotation, source_identifier, associations (CODE|cancer|role;…)",
+  cohorts: "study_id, name, cancer_code, source_name, n_samples_mutation, n_samples_cna, citation, source_url, retrieved_at",
+  genomic_prevalence: "gene_symbol, study_id, alteration_type, altered_cases, profiled_cases",
+  external_benchmarks: "biomarker_code, cancer_code, biomarker_role, benchmark_source, best_evidence_level, n_items, n_shared_publications, matched_on, retrieved_at",
 };
 
 export default function ImportPage() {
@@ -27,6 +30,8 @@ export default function ImportPage() {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Only needed when the backend sets ADMIN_TOKEN; kept in memory, never stored.
+  const [token, setToken] = useState("");
 
   const submit = async (dryRun: boolean, e?: FormEvent) => {
     e?.preventDefault();
@@ -35,7 +40,8 @@ export default function ImportPage() {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      setReport(await apiPost<ImportReport>(`/import/${entity}`, fd, { dry_run: dryRun }));
+      setReport(await apiPost<ImportReport>(`/import/${entity}`, fd, { dry_run: dryRun },
+        token ? { "X-Admin-Token": token } : {}));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Upload failed");
     } finally {
@@ -66,6 +72,11 @@ export default function ImportPage() {
         </form>
         <p className="mt-3 text-xs text-slate-500">Expected columns: <span className="font-mono">{COLUMNS[entity]}</span></p>
         <p className="mt-1 text-xs text-slate-500">Import order matters: referenced genes, cancers, publications and biomarkers must exist first. Import is enabled only after a successful dry run.</p>
+        <label className="mt-3 flex max-w-sm flex-col gap-1 text-xs font-medium text-slate-600">
+          Admin token (only if the server sets ADMIN_TOKEN)
+          <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm" />
+        </label>
       </Card>
       {error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {report && (

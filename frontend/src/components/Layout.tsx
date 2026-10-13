@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity,
+  BadgeCheck,
   BarChart3,
   BookOpen,
   Database,
@@ -11,6 +12,7 @@ import {
   Info,
   Menu,
   Microscope,
+  ScatterChart,
   Search,
   ShieldAlert,
   Upload,
@@ -24,6 +26,8 @@ const NAV = [
   { to: "/entities", label: "Genes, Proteins & Pathways", icon: Dna },
   { to: "/publications", label: "Research Evidence", icon: BookOpen },
   { to: "/gaps", label: "Evidence Gaps", icon: ShieldAlert },
+  { to: "/prevalence", label: "Evidence vs Prevalence", icon: ScatterChart },
+  { to: "/validation", label: "Score Validation", icon: BadgeCheck },
   { to: "/analytics", label: "SQL Analytics", icon: BarChart3 },
   { to: "/methodology", label: "Scoring Method", icon: Activity },
   { to: "/import", label: "Data Import", icon: Upload },

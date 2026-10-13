@@ -16,6 +16,7 @@ export interface BiomarkerBrief {
   biomarker_code: string;
   name: string;
   biomarker_type: string;
+  prevalence_basis?: string | null;
 }
 
 export interface CancerBrief {
@@ -29,6 +30,7 @@ export interface GeneBrief {
   official_symbol: string;
   full_name: string | null;
   ncbi_gene_id: number | null;
+  hgnc_id?: string | null;
 }
 
 export interface ProteinBrief {
@@ -85,6 +87,30 @@ export interface Evidence {
   publication: Publication | null;
 }
 
+/** TCGA frequency of the alteration that defines a biomarker, pooled over the cancer's cohorts. */
+export interface TcgaFrequency {
+  gene_symbol?: string;
+  alteration_type: string;
+  basis?: string;
+  upper_bound?: boolean;
+  altered_cases: number;
+  profiled_cases: number;
+  frequency: number;
+  ci95_low: number;
+  ci95_high: number;
+  cohorts: string[];
+  source?: string;
+}
+
+export interface CivicBenchmark {
+  source: string;
+  best_evidence_level: string | null;
+  n_items: number;
+  n_shared_publications: number;
+  matched_on: string | null;
+  retrieved_at: string | null;
+}
+
 export interface Association {
   association_id: number;
   biomarker: BiomarkerBrief;
@@ -96,6 +122,8 @@ export interface Association {
   variants: { variant_id: number; variant_identifier: string }[];
   n_evidence: number;
   n_publications: number;
+  civic?: CivicBenchmark | null;
+  tcga?: TcgaFrequency | null;
   evidence?: Evidence[];
 }
 
@@ -141,6 +169,8 @@ export interface Cancer extends CancerBrief {
   tissue_origin: string | null;
   cancer_category: string | null;
   external_identifier: string | null;
+  mondo_id?: string | null;
+  icdo_topography?: string | null;
   gdc_project_id: string | null;
   description: string | null;
   n_biomarkers: number;
@@ -154,7 +184,23 @@ export interface HistogramBin {
   count: number;
 }
 
+export interface Cohort {
+  cohort_id: number;
+  study_id: string;
+  name: string;
+  cancer_id: number;
+  cancer_name: string;
+  source_name: string;
+  n_samples_mutation: number | null;
+  n_samples_cna: number | null;
+  citation: string | null;
+  source_url: string | null;
+  retrieved_at: string | null;
+}
+
 export interface CancerDetail extends Omit<Cancer, "n_biomarkers" | "n_associations"> {
+  cohorts: Cohort[];
+  top_altered_genes: (TcgaFrequency & { gene_id: number; gene_symbol: string })[];
   associations: Association[];
   role_distribution: { role: string; count: number }[];
   genes: (GeneBrief & { biomarkers: string[] })[];
@@ -214,12 +260,20 @@ export interface GapItem {
   evidence_coverage: number | null;
   flags: string[];
   gap_count: number;
+  gap_severity: number;
+  n_context_records: number;
+  tcga_frequency: number | null;
+  prevalence_basis: string | null;
+  curation_priority: number;
   details: Record<string, unknown>;
 }
 
 export interface GapResponse {
   summary: Record<string, number>;
   flag_descriptions: Record<string, string>;
+  severity: Record<string, number>;
+  role_evidence_expectations: Record<string, string[]>;
+  n_associations: number;
   total: number;
   items: GapItem[];
 }
@@ -280,6 +334,8 @@ export interface Methodology {
   weights: Record<string, number>;
   publication_cap: number;
   min_coverage: number;
+  breadth_discount: number;
+  changes_from_previous_version: string[];
 }
 
 export interface ImportReport {
@@ -291,4 +347,90 @@ export interface ImportReport {
   errors: { row: number; field: string | null; message: string }[];
   dry_run: boolean;
   ok: boolean;
+}
+
+export interface DiscordanceItem extends TcgaFrequency {
+  association_id: number;
+  biomarker_id: number;
+  biomarker_name: string;
+  biomarker_code: string;
+  cancer_name: string;
+  biomarker_role: string;
+  overall_score: number;
+  score_status: ScoreStatus;
+  quadrant: "established" | "under_curated" | "niche_supported" | "rare_thin";
+}
+
+export interface Discordance {
+  score_threshold: number;
+  common_threshold: number;
+  quadrant_descriptions: Record<string, string>;
+  quadrant_counts: Record<string, number>;
+  n_plotted: number;
+  n_not_applicable: number;
+  items: DiscordanceItem[];
+  caveats: string[];
+}
+
+export interface RobustnessItem {
+  association_id: number;
+  biomarker_id: number;
+  biomarker_name: string;
+  cancer_name: string;
+  biomarker_role: string;
+  baseline_score: number;
+  baseline_rank: number;
+  median_rank: number;
+  rank_p05: number;
+  rank_p95: number;
+  rank_interval_width: number;
+  share_in_top_k: number;
+}
+
+export interface Robustness {
+  n_ranked: number;
+  n_excluded_incomplete: number;
+  draws: number;
+  seed: number;
+  top_k: number;
+  weight_distribution: string;
+  spearman_mean: number | null;
+  spearman_p05: number | null;
+  top_k_retention_mean: number | null;
+  ablation: { dropped_component: string; spearman_vs_baseline: number; top_k_retained: number }[];
+  items: RobustnessItem[];
+  baseline_weights: Record<string, number>;
+}
+
+export interface CivicValidation {
+  benchmark: string;
+  n_associations: number;
+  n_covered: number;
+  n_paired: number;
+  spearman_rho: number | null;
+  permutation_p_value: number | null;
+  bootstrap_ci95: [number, number] | null;
+  mean_score_by_level: { level: string; meaning: string; n: number; mean_score: number; min_score: number; max_score: number }[];
+  version_check: { spearman_rho_v1_0_0: number | null; difference_ci95: [number, number] | null; explanation: string } | null;
+  coverage_by_biomarker_type: { biomarker_type: string; covered: number; not_covered: number }[];
+  publications_shared_with_civic: { associations_sharing_at_least_one_pmid: number; total_shared_pmids: number };
+  items: {
+    association_id: number; biomarker_name: string; biomarker_code: string; biomarker_type: string; cancer_name: string;
+    biomarker_role: string; overall_score: number | null; score_status: ScoreStatus | null; civic_level: string | null;
+    civic_items: number; shared_publications: number; matched_on: string | null;
+  }[];
+  interpretation_notes: string[];
+}
+
+export interface VersionComparison {
+  from_version: string;
+  to_version: string;
+  n_associations: number;
+  n_changed: number;
+  mean_delta: number | null;
+  items: {
+    association_id: number; biomarker_name: string; biomarker_code: string; cancer_name: string; biomarker_role: string;
+    score_v1_0_0: number | null; score_v1_1_0: number | null; status_v1_0_0: string; status_v1_1_0: string;
+    rank_v1_0_0: number | null; rank_v1_1_0: number | null; delta: number | null; reasons: string[];
+  }[];
 }

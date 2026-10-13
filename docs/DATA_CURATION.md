@@ -5,6 +5,7 @@ All curated data lives in `backend/data/sample/*.csv`. Import order (dependencie
 ```
 cancers → genes → proteins → pathways → publications → biomarkers → gene_pathways
 → biomarker_pathways → associations → evidence → evidence_kegg → variants
+→ cohorts → genomic_prevalence → external_benchmarks
 ```
 
 ## Workflow for a new biomarker–cancer association
@@ -49,6 +50,12 @@ Or upload a single CSV in the UI (*Data Import* page): run a dry-run validation 
 | `chromosome` | 1–22, X, Y, MT (a `chr` prefix is stripped) |
 | `reference_allele`, `alternate_allele` | A, C, G, T, N or `-` |
 | `dbsnp_id` | `rs` followed by digits |
+| `hgnc_id` | `HGNC:` followed by digits; unique |
+| `mondo_id` | `MONDO:` followed by 7 digits |
+| `icdo_topography` | ICD-O-3 topography code(s) or range, e.g. `C50`, `C18-C20` |
+| `prevalence_basis` | Controlled vocabulary; only for a biomarker with exactly one gene |
+| `altered_cases`, `profiled_cases` | `0 <= altered <= profiled`, `profiled > 0` |
+| `best_evidence_level` | A-E, present exactly when `n_items > 0` |
 | Referenced codes | Must already exist (biomarker, cancer, gene, publication, association) |
 | Duplicate natural key in one file | Rejected with both row numbers |
 
@@ -61,3 +68,47 @@ Any error rejects the whole file (atomic), and the report lists row numbers (hea
 - KEGG REST: free for academic use; commercial use requires a licence.
 - UniProt, Ensembl and GDC: public REST APIs; cite them as described on their websites.
 - Do not scrape web pages. Use the documented APIs only.
+
+## Version 1.1 data
+
+### Ontology identifiers
+
+`python -m scripts.fetch_ontologies` verifies (and with `--write` writes) HGNC IDs for every gene, checked against the
+stored NCBI Gene ID, and Mondo IDs for every cancer, checked through EBI OLS to exist, be current and cross-reference
+the stored DOID. ICD-O-3 topography codes are curator-assigned in the script from the WHO ICD-O-3 topography axis.
+
+### TCGA alteration counts (`cohorts.csv`, `genomic_prevalence.csv`)
+
+`python -m scripts.fetch_prevalence --write` fetches raw counts from cBioPortal for the five TCGA PanCancer Atlas
+cohorts and every gene in `genes.csv`. To add a cancer, add its cBioPortal study to `STUDIES` in the script (a cancer
+may have several studies; they are pooled by summing counts).
+
+### Choosing `prevalence_basis` for a biomarker
+
+Set it only when a gene-level TCGA frequency honestly describes the biomarker:
+
+| Biomarker | Basis |
+|---|---|
+| Defined by any activating or loss-of-function somatic mutation of one gene (TP53, PIK3CA, NRAS, STK11) | `somatic_mutation` |
+| Defined by a specific variant, hotspot or class (KRAS G12C, BRAF V600E, EGFR exon 19/L858R, MET exon 14) | `somatic_mutation_upper_bound` |
+| Gene amplification (HER2, AR) | `amplification` |
+| Gene loss by deletion (PTEN) | `deep_deletion` |
+| Protein or RNA expression, circulating protein, germline carrier status, fusion, multi-gene signature, genomic signature, acquired-resistance alteration | leave blank |
+
+### CIViC benchmark (`external_benchmarks.csv`)
+
+`python -m scripts.fetch_civic --write` rebuilds the benchmark. Matching rules (gene, disease-name rules, evidence
+type to role, direction SUPPORTS, and `VARIANT_FILTERS` for variant-specific biomarkers) are in the script and are
+recorded per row in `matched_on`. The benchmark is used only for validation: never copy CIViC items into
+`evidence.csv`, or the validation becomes circular.
+
+### Regenerating the SQL reference files
+
+After changing a report or a migration, run `python -m scripts.export_sql` to regenerate
+`sql/query_catalogue.sql` and `sql/schema_postgresql.sql`.
+
+### Note on CSV line endings
+
+Keep LF line endings (the repository enforces them through `.gitattributes`). Python's `csv` module writes CRLF by
+default; pass `lineterminator="\n"` or use pandas `to_csv(..., lineterminator="\n")`, otherwise every line shows as
+changed in a diff.

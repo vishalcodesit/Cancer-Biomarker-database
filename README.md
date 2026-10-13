@@ -1,13 +1,17 @@
 # CancerBioMap
 
-**An Integrated Cancer Biomarker Database with Evidence-Based Association Analysis**
+**An integrated cancer biomarker database that measures how well each biomarker-cancer association is supported by
+evidence, how common it is in tumours, and how far that judgement can be trusted.**
 
-A full-stack biological database (PostgreSQL/SQLite + FastAPI + React) that integrates cancer
-biomarkers with genes, proteins, pathways, variants and publications. It computes a transparent
-**evidence-support score** and an **evidence-gap analysis** for every biomarker–cancer association.
+A full-stack biological database (PostgreSQL or SQLite, FastAPI, React) that integrates curated cancer biomarkers with
+genes, proteins, pathways, variants, publications, TCGA tumour genomics and an external expert benchmark (CIViC).
 
-> **Research and education only.** Scores summarise the evidence *recorded in this database*. They are
-> not probabilities of clinical validity and say nothing about clinical approval, safety or effectiveness.
+> **Research and education only.** Scores summarise the evidence recorded in this database. They are not
+> probabilities of clinical validity and say nothing about clinical approval, safety or effectiveness.
+
+Version 1.1. What changed from 1.0, and why, is documented with evidence in [docs/UPGRADES.md](docs/UPGRADES.md).
+A guided tour of the code is in [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md); viva preparation is in
+[docs/VIVA_QUESTIONS.md](docs/VIVA_QUESTIONS.md); curation procedures are in [docs/DATA_CURATION.md](docs/DATA_CURATION.md).
 
 ---
 
@@ -16,101 +20,89 @@ biomarkers with genes, proteins, pathways, variants and publications. It compute
 1. [Abstract](#1-abstract)
 2. [Problem statement](#2-problem-statement)
 3. [Objectives](#3-objectives)
-4. [Literature review guidance and existing systems](#4-literature-review-guidance-and-existing-systems)
-5. [Proposed system and novelty claim](#5-proposed-system-and-novelty-claim)
+4. [Related resources](#4-related-resources)
+5. [Contribution and novelty](#5-contribution-and-novelty)
 6. [System architecture](#6-system-architecture)
-7. [Technology stack and justification](#7-technology-stack-and-justification)
-8. [Database design (ER diagram, normalization)](#8-database-design)
-9. [Data sources, curation and attribution](#9-data-sources-curation-and-attribution)
-10. [Evidence scoring methodology](#10-evidence-scoring-methodology)
-11. [Evidence-gap analysis](#11-evidence-gap-analysis)
-12. [Installation and execution](#12-installation-and-execution)
-13. [API documentation](#13-api-documentation)
-14. [Example SQL queries](#14-example-sql-queries)
-15. [Testing methodology and results](#15-testing-methodology-and-results)
-16. [Project structure](#16-project-structure)
-17. [Limitations](#17-limitations)
-18. [Future scope](#18-future-scope)
-
-Viva preparation: [docs/VIVA_QUESTIONS.md](docs/VIVA_QUESTIONS.md) · Curation guide: [docs/DATA_CURATION.md](docs/DATA_CURATION.md)
+7. [Technology stack](#7-technology-stack)
+8. [Database design](#8-database-design)
+9. [Data sources and integrity](#9-data-sources-and-integrity)
+10. [Evidence-support score](#10-evidence-support-score)
+11. [Evidence-gap analysis and curation priority](#11-evidence-gap-analysis-and-curation-priority)
+12. [Genomic context: evidence versus prevalence](#12-genomic-context-evidence-versus-prevalence)
+13. [Validation of the score](#13-validation-of-the-score)
+14. [Installation and execution](#14-installation-and-execution)
+15. [API](#15-api)
+16. [SQL: views and report catalogue](#16-sql-views-and-report-catalogue)
+17. [Testing](#17-testing)
+18. [Project structure](#18-project-structure)
+19. [Limitations and future work](#19-limitations-and-future-work)
 
 ---
 
 ## 1. Abstract
 
-Cancer biomarkers are scattered across many resources: gene databases, protein databases, pathway
-maps, genomic consortia and the primary literature. Most biomarker lists say *that* a biomarker is
-associated with a cancer, but not *how well* that association is supported by the evidence they hold.
-CancerBioMap integrates 47 curated biomarkers, 4 cancer types, 43 genes, 40 proteins, 14 KEGG pathways,
-12 variants and 84 PubMed publications in a normalized relational schema of 15 tables. For each of the
-58 biomarker–cancer–role associations, it computes an explainable evidence-support score from four
-components: publication support, source diversity, evidence type and evidence consistency. Unknown
-components are treated as *unknown* rather than zero. The system then flags evidence gaps, such as
-thin, single-source, untyped, incomplete or conflicting evidence. Every reference identifier in the
-sample dataset was verified against the official API of its source (PubMed, NCBI Gene, UniProt, KEGG,
-NCI GDC, Ensembl).
+Cancer biomarker knowledge is scattered across gene and protein databases, pathway maps, genomic consortia and the
+literature, and most resources state that a biomarker is associated with a cancer without saying how well that
+association is supported. CancerBioMap integrates 47 curated biomarkers, 4 cancer types, 43 genes, 40 proteins,
+14 KEGG pathways, 12 variants and 86 verified PubMed publications in a normalised relational schema of 18 tables and
+2 views. For each of 58 biomarker-cancer-role associations it computes an explainable, missing-data-aware
+evidence-support score and an evidence-gap profile, places the association against its alteration frequency in
+5 TCGA PanCancer Atlas cohorts, and ranks gaps into a prevalence-weighted curation work list. The score is validated
+externally against CIViC expert evidence levels (Spearman rho 0.47, permutation p = 0.006, n = 34) and internally for
+robustness to its weights (mean rank correlation 0.91 over 1,000 random weightings). Every reference identifier was
+verified against the official API of its source.
 
 ## 2. Problem statement
 
 1. Biomarker information is fragmented across heterogeneous resources with different identifiers.
-2. Users can see *which* biomarkers are linked to a cancer, but rarely *what evidence* supports each link,
-   how diverse it is, or whether it conflicts.
-3. Simple counts hide uncertainty. A biomarker with no recorded evidence looks the same as one with
-   evidence against it unless missing data is modelled explicitly.
-4. Curators need to know where evidence is thin so they can prioritise curation.
+2. Users can see which biomarkers are linked to a cancer, but rarely what evidence supports each link, how diverse it
+   is, or whether it conflicts.
+3. Simple counts hide uncertainty: a biomarker with no recorded evidence looks the same as one with evidence against
+   it unless missing data is modelled explicitly.
+4. Leading knowledge bases centre on DNA variants; serum, protein and methylation markers are under-represented.
+5. Curators need to know where evidence is thin, and which of those gaps matter most.
 
 ## 3. Objectives
 
-- Design a normalized relational schema (3NF) for biomarkers, cancers, genes, proteins, variants,
-  pathways, publications, associations, evidence and scores, with full referential integrity.
-- Build a validated, idempotent import pipeline for curated CSVs, plus API-based verification
-  against public resources.
-- Provide REST APIs and a research dashboard for search, filtering, navigation between related
-  entities, analytics and CSV export.
-- Implement and test an **evidence-aware confidence score** with explicit missing-data handling,
-  and an **evidence-gap analysis**.
-- Document SQL queries, the methodology and its limitations for academic assessment.
+* A normalised (3NF) relational schema for biomarkers, cancers, genes, proteins, variants, pathways, publications,
+  associations, evidence, scores, tumour cohorts, alteration counts and external benchmarks, with full referential
+  integrity and SQL views for derived data.
+* A validated, idempotent import pipeline for curated CSVs, plus scripts that verify or fetch data from public APIs.
+* REST APIs and a research dashboard for search, filtering, navigation, analytics and CSV export.
+* An evidence-aware, decomposable, monotone score with explicit missing-data handling, and an evidence-gap analysis.
+* Integration of population-level tumour genomics (TCGA) with literature evidence.
+* Validation of the score against an independent expert benchmark and for sensitivity to its parameters.
+* Verified portability between SQLite and PostgreSQL.
 
-## 4. Literature review guidance and existing systems
+## 4. Related resources
 
-Review these established resources (read their documentation and the papers describing them) before
-writing your literature review. Verify every claim you make about them from their own documentation.
-
-| Resource | What it provides | Relevance / limitation for this project |
+| Resource | What it provides | Relation to this project |
 |---|---|---|
-| **CIViC** (civicdb.org) | Open, community-curated clinical interpretations of cancer variants, with evidence items, evidence levels and ratings | Rich evidence model. Its evidence levels are expert-assigned; it does not compute a decomposed coverage score with explicit "unknown" components |
-| **OncoKB** (oncokb.org) | Expert-curated precision-oncology knowledge base with therapeutic levels of evidence | Authoritative actionability levels; tiers are categorical expert judgements, and some content has licence restrictions |
-| **COSMIC** (cancer.sanger.ac.uk/cosmic) | Catalogue of somatic mutations in cancer | Mutation frequencies, not biomarker-role evidence |
-| **cBioPortal** (cbioportal.org) | Exploration of cancer genomics datasets (including TCGA) | Data exploration, not curated biomarker–evidence links |
-| **MarkerDB** (markerdb.ca) | Database of clinical and pre-clinical molecular biomarkers | Broad biomarker catalogue; evidence-coverage scoring is not its focus |
-| **ClinVar** (ncbi.nlm.nih.gov/clinvar) | Variant–condition assertions with review status | Germline/somatic variant interpretation; review "stars" reflect submitter review, not evidence diversity |
-| **Cancer Genome Interpreter** (cancergenomeinterpreter.org) | Annotation of tumour alterations, with a catalogue of biomarkers of drug response | Tool-oriented; associations are not scored for evidence coverage |
+| CIViC | Community-curated clinical interpretations of cancer variants with evidence levels A-E | Used as the external benchmark for validation (never as a score input). Variant-centred: in our data it covers 17/20 mutation associations and 0/4 serum-protein associations |
+| OncoKB | Expert-curated therapeutic levels of evidence | Categorical expert levels; licensed for commercial use |
+| COSMIC | Catalogue of somatic mutations | Mutation frequencies, not role-specific evidence |
+| cBioPortal | Exploration of cancer genomics datasets including TCGA | Source of the TCGA alteration counts used here |
+| DisGeNET | Gene-disease associations with a GDA score built from source and publication counts | Closest prior art for an evidence score; not role-specific, no explicit unknown state, no prevalence link |
+| MarkerDB | Clinical and pre-clinical molecular biomarkers | Broad catalogue; evidence coverage scoring is not its focus |
+| ClinVar | Variant-condition assertions with review status | Germline/somatic interpretation; review stars reflect submitter review |
+| Cancer Genome Interpreter | Annotation of tumour alterations, including drug-response biomarkers | Tool-oriented; associations are not scored for evidence coverage |
 
-**Suggested review structure:** (1) biomarker types and roles (diagnostic, prognostic, predictive, risk,
-monitoring); (2) biological database design and integration; (3) evidence-level frameworks used by the
-resources above; (4) handling of missing and conflicting evidence; (5) the gap this project addresses.
+## 5. Contribution and novelty
 
-## 5. Proposed system and novelty claim
+CancerBioMap does not claim a new biological finding or a clinically validated score. Its contributions are:
 
-**Proposed system.** A relational biomarker database that stores each association *per role* (for example,
-HER2 / breast / *predictive* is separate from HER2 / breast / *prognostic*). It attaches every piece of
-evidence with provenance (source, record ID, retrieval date, URL) and computes a reproducible,
-explainable score and gap profile from that evidence.
-
-**Precise novelty claim (keep the wording modest).** CancerBioMap does not claim a new biological finding
-or a clinically validated scoring system. Its contribution is an **evidence-coverage assessment that is
-decomposable and missing-data-aware**, integrated directly into a teaching-scale relational database:
-
-1. Four normalized, individually inspectable components with configurable weights.
-2. Explicit separation of *unknown* from *zero*, with a documented provisional renormalisation and an
-   "insufficient" state below a minimum coverage.
-3. De-duplication rules: studies are counted by PMID/DOI and sources by name, so duplicate records
-   never inflate support.
-4. A gap analysis that turns the same evidence metadata into actionable curation flags.
-
-Established resources such as CIViC and OncoKB assign expert evidence levels. This project
-complements rather than replaces such approaches. Before claiming novelty in your report, compare it
-against the resources in section 4 and state the differences you have verified.
+1. **Role-specific, decomposable, missing-data-aware evidence score.** Each biomarker-cancer association is stored and
+   scored per role (HER2 / breast / predictive is separate from HER2 / breast / prognostic). Four inspectable
+   components; unknown is never treated as zero; provisional and insufficient states. Unlike a count-based score
+   (for example DisGeNET's GDA score), it is role-specific, separates unknown from absent, and is provably monotone:
+   adding supporting evidence never lowers it (tested on randomised cases).
+2. **Evidence versus prevalence.** Literature support is set against how common the defining alteration is in tumours
+   (TCGA, raw counts, Wilson intervals), which identifies common alterations with thin evidence.
+3. **Prevalence-weighted curation priority.** Gap flags with severities, including a role-evidence mismatch check,
+   become a ranked work list. In this release the list was used to curate two pivotal trials, which cleared their
+   flags and raised agreement with the external benchmark.
+4. **Validated, not just asserted.** Rank concordance with CIViC, a Monte Carlo weight-robustness analysis with
+   component ablation, and a versioned audit of every score change.
 
 ## 6. System architecture
 
@@ -118,37 +110,35 @@ against the resources in section 4 and state the differences you have verified.
 flowchart LR
     subgraph Sources[Public sources]
       PM[PubMed E-utilities]
-      NG[NCBI Gene]
+      NG[NCBI Gene / HGNC]
       UP[UniProt REST]
       KG[KEGG REST]
-      GDC[NCI GDC API]
+      CB[cBioPortal API<br/>TCGA PanCancer Atlas]
+      CV[CIViC GraphQL]
+      OL[EBI OLS<br/>Mondo, DOID]
       EN[Ensembl REST]
     end
     CSV[(Curated CSVs<br/>data/sample)]
-    Sources -- verify & enrich<br/>scripts/fetch_pubmed.py<br/>scripts/verify_sources.py --> CSV
-    CSV -- validated import<br/>services/importer.py --> DB[(PostgreSQL / SQLite<br/>15 tables)]
-    DB --> SVC[FastAPI services<br/>queries · scoring · gaps · analytics]
-    SVC --> API[REST API + Swagger /docs]
-    API -- /api proxy --> UI[React + TypeScript dashboard<br/>Recharts · React Router]
+    Sources -- verify and fetch<br/>scripts/*.py --> CSV
+    CSV -- validated import<br/>services/importer.py --> DB[(PostgreSQL / SQLite<br/>18 tables + 2 views)]
+    DB --> SVC[FastAPI services<br/>queries, scoring, gaps, prevalence,<br/>validation, robustness, analytics]
+    SVC --> API[REST API + OpenAPI /docs]
+    API -- /api proxy --> UI[React + TypeScript dashboard]
 ```
 
-Layers:
-- **Data layer**: SQLAlchemy ORM models ([backend/app/models.py](backend/app/models.py)) and Alembic migrations ([backend/alembic/versions](backend/alembic/versions)).
-- **Service layer**: query services, the pure scoring function, gap analysis and the SQL report catalogue ([backend/app/services](backend/app/services), [backend/app/scoring.py](backend/app/scoring.py)).
-- **API layer**: FastAPI routers with validated parameters and structured errors ([backend/app/routers](backend/app/routers)).
-- **Presentation layer**: React single-page app ([frontend/src](frontend/src)).
+Layers: data (SQLAlchemy models, Alembic migrations, SQL views), services (pure scoring and robustness modules plus
+database services), API (FastAPI routers with validated parameters and structured errors), presentation (React).
 
-## 7. Technology stack and justification
+## 7. Technology stack
 
 | Layer | Technology | Why |
 |---|---|---|
-| Database | **PostgreSQL** (target), **SQLite** (development fallback) | Mature relational DBMS with CHECK/UNIQUE/FK constraints. SQLite lets the project run with zero setup; the schema and SQL are portable |
-| ORM / migrations | SQLAlchemy 2, Alembic | Typed mappings, parameterized queries (no SQL injection), versioned schema changes |
-| API | FastAPI + Pydantic v2 | Automatic OpenAPI/Swagger docs and declarative validation |
-| Data processing | Python, pandas | CSV parsing and validation, data checks |
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS 4 | Typed components, fast builds, consistent styling |
-| Charts / icons / routing | Recharts, Lucide React, React Router 6 | Declarative charts, accessible icons, deep-linkable pages |
-| Testing | Pytest, FastAPI TestClient, Vitest, Testing Library | Backend unit/integration tests and frontend component tests |
+| Database | PostgreSQL (verified on 16), SQLite for zero-setup development | CHECK/UNIQUE/FK constraints, views; identical results on both |
+| ORM and migrations | SQLAlchemy 2, Alembic | Typed mappings, bound parameters, versioned and reversible schema changes |
+| API | FastAPI, Pydantic v2 | Declarative validation, automatic OpenAPI documentation |
+| Data processing | Python, pandas | CSV validation and the curation scripts |
+| Frontend | React 18, TypeScript (strict), Vite, Tailwind CSS 4, Recharts | Typed components, accessible charts with table views |
+| Testing | Pytest, FastAPI TestClient, Vitest, Testing Library | 80 backend and 15 frontend tests |
 
 ## 8. Database design
 
@@ -160,7 +150,8 @@ erDiagram
     CANCER ||--o{ BIOMARKER_CANCER : "has associations"
     BIOMARKER_CANCER ||--o{ EVIDENCE : "supported by"
     PUBLICATION |o--o{ EVIDENCE : "cited in"
-    BIOMARKER_CANCER ||--o{ EVIDENCE_SCORE : "scored as"
+    BIOMARKER_CANCER ||--o{ EVIDENCE_SCORE : "scored as (per version)"
+    BIOMARKER_CANCER ||--o{ EXTERNAL_BENCHMARK : "benchmarked by"
     BIOMARKER ||--o{ BIOMARKER_GENE : ""
     GENE ||--o{ BIOMARKER_GENE : ""
     BIOMARKER ||--o{ BIOMARKER_PATHWAY : ""
@@ -172,253 +163,210 @@ erDiagram
     GENE ||--o{ VARIANT : "located in"
     VARIANT ||--o{ VARIANT_ASSOCIATION : ""
     BIOMARKER_CANCER ||--o{ VARIANT_ASSOCIATION : ""
+    CANCER ||--o{ COHORT : "profiled in"
+    COHORT ||--o{ GENOMIC_PREVALENCE : "counts"
+    GENE ||--o{ GENOMIC_PREVALENCE : "altered in"
 
     BIOMARKER {
       int biomarker_id PK
       string biomarker_code UK
       string name UK
       string biomarker_type "CHECK vocab"
-      text description
-      text biological_function
-      string external_identifier
-      timestamptz created_at
+      string prevalence_basis "CHECK vocab, nullable"
     }
     CANCER {
       int cancer_id PK
       string code UK
-      string name UK
-      string tissue_origin
-      string cancer_category
       string external_identifier "DOID"
-      string gdc_project_id
-      text description
+      string mondo_id "verified via OLS"
+      string icdo_topography "ICD-O-3"
     }
     GENE {
       int gene_id PK
       string official_symbol UK
-      string full_name
-      string organism
       int ncbi_gene_id UK
-      text description
-    }
-    PROTEIN {
-      int protein_id PK
-      string accession UK "UniProt"
-      string name
-      text function
-      string organism
-    }
-    PATHWAY {
-      int pathway_id PK
-      string pathway_name
-      string pathway_database "UK with external_identifier"
-      string external_identifier
-      text description
-      string source_url
-    }
-    VARIANT {
-      int variant_id PK
-      int gene_id FK
-      string variant_identifier UK
-      string protein_change
-      string dbsnp_id
-      string genome_assembly
-      string chromosome
-      int position "CHECK > 0"
-      string reference_allele
-      string alternate_allele
-      text clinical_or_research_annotation
-      string source_identifier
-    }
-    PUBLICATION {
-      int publication_id PK
-      string pmid UK
-      string doi UK
-      text title
-      text authors
-      int publication_year "CHECK 1900-2100"
-      string journal
-      string source_url
+      string hgnc_id UK
     }
     BIOMARKER_CANCER {
       int association_id PK
-      int biomarker_id FK
-      int cancer_id FK
-      string biomarker_role "CHECK vocab; UK(biomarker,cancer,role)"
-      text association_description
+      string biomarker_role "UK(biomarker, cancer, role)"
       string source_status "CHECK vocab"
-      timestamptz created_at
     }
     EVIDENCE {
       int evidence_id PK
-      int association_id FK
       int publication_id FK "nullable"
       string evidence_type "nullable = unknown"
-      string source_name
-      string source_record_id
-      text evidence_summary
       string consistency_annotation "nullable = unknown"
-      timestamptz retrieved_at
-      string source_url
     }
     EVIDENCE_SCORE {
       int score_id PK
-      int association_id FK
-      float publication_support_score "nullable"
-      float source_diversity_score "nullable"
-      float evidence_type_score "nullable"
-      float consistency_score "nullable"
       float overall_score "nullable"
-      float evidence_coverage
       string score_status
-      string missing_components
       string scoring_version "UK with association"
-      timestamptz calculated_at
+    }
+    COHORT {
+      int cohort_id PK
+      string study_id UK "cBioPortal study"
+      int n_samples_mutation
+      int n_samples_cna
+    }
+    GENOMIC_PREVALENCE {
+      int prevalence_id PK
+      string alteration_type "CHECK vocab"
+      int altered_cases "CHECK >= 0 and <= profiled"
+      int profiled_cases "CHECK > 0"
+    }
+    EXTERNAL_BENCHMARK {
+      int benchmark_id PK
+      string benchmark_source "UK with association"
+      string best_evidence_level "CHECK A-E, nullable"
+      int n_items
+      int n_shared_publications
     }
 ```
 
-Junction tables (`biomarker_gene`, `biomarker_pathway`, `gene_pathway`, `gene_protein`,
-`variant_association`) use **composite primary keys**. The full DDL is in
-[backend/sql/schema_postgresql.sql](backend/sql/schema_postgresql.sql), generated from the Alembic migration.
+Unchanged entities (protein, pathway, variant, publication and the junction tables) are as in the full DDL:
+[backend/sql/schema_postgresql.sql](backend/sql/schema_postgresql.sql), generated from the migrations.
 
-### Design decisions and normalization
+### Design decisions
 
-- **1NF**: atomic attributes. Multi-valued facts (a biomarker's genes, a gene's pathways) live in junction
-  tables, never in comma-separated columns. (CSV files use `;` lists only as an import convenience; the
-  importer splits them into rows.)
-- **2NF**: every non-key attribute depends on the whole key. Junction tables hold only their keys, plus
-  `annotation_source`, which describes that specific link.
-- **3NF**: no transitive dependencies. For example, publication metadata is stored once in `publication`
-  and referenced by `evidence.publication_id`, not repeated per evidence row; gene facts are not copied
-  into `variant`.
-- **Association per role**: `UNIQUE(biomarker_id, cancer_id, biomarker_role)`. Evidence for a predictive
-  claim differs from evidence for a prognostic one, so each gets its own row, evidence and score.
-- **Gene-level pathway membership** (`gene_pathway`) is stored separately from the derived
-  `biomarker_pathway` link, which records which gene caused the link (`annotation_source`).
-- **Missing data**: nullable `evidence_type`, `consistency_annotation` and score components mean
-  *unknown*. CHECK constraints allow NULL explicitly.
-- **Integrity**: CHECK constraints enforce controlled vocabularies, year ranges, positive positions and
-  "pmid OR doi". FKs use `ON DELETE CASCADE` for dependent rows, `RESTRICT` for referenced master data
-  (a cancer with associations cannot be deleted), and `SET NULL` for an evidence row's publication.
-- **Indexes**: on all FKs, on search/filter columns (`biomarker.name`, `biomarker_type`,
-  `publication_year`, `evidence_type`, `overall_score`) and a composite `(cancer_id, biomarker_role)`.
-- **Scores are versioned** (`UNIQUE(association_id, scoring_version)`), so a method change never
-  silently overwrites earlier results.
+* **1NF**: atomic attributes; multi-valued facts live in junction tables (CSV `;` lists are split by the importer).
+* **2NF/3NF**: no partial or transitive dependencies; publication metadata lives once in `publication`; cohort
+  descriptors live once in `cohort`.
+* **Counts, not percentages**: `genomic_prevalence` stores altered and profiled counts. Frequencies are derived in
+  the view `v_tcga_frequency`, which pools a cancer's cohorts by summing counts (averaging percentages would be wrong
+  when cohorts differ in size).
+* **Association per role**: `UNIQUE(biomarker_id, cancer_id, biomarker_role)`.
+* **Missing data**: nullable evidence type, consistency and score components mean unknown.
+* **Integrity**: CHECK constraints on every vocabulary, year range, count relationship and score range; FK actions
+  chosen per relationship (CASCADE for dependent rows, RESTRICT for referenced master data, SET NULL for a removed
+  publication).
+* **Versioned scores**: `UNIQUE(association_id, scoring_version)`; version 1.0.0 remains reproducible.
+* **Deterministic ordering**: every ORDER BY ends with a unique, collation-independent key, so SQLite and PostgreSQL
+  return identical results.
 
-## 9. Data sources, curation and attribution
+## 9. Data sources and integrity
 
-| Source | Used for | How it was used |
+| Source | Used for | Verification |
 |---|---|---|
-| [PubMed / NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) | Publication metadata | `esummary` retrieved title, authors, journal, year and DOI for all 84 PMIDs |
-| [NCBI Gene](https://www.ncbi.nlm.nih.gov/gene/) | Gene IDs and symbols | 43 genes verified via `esummary` |
-| [UniProt](https://www.uniprot.org/) | Protein accessions | 40 reviewed human entries verified via REST |
-| [KEGG](https://www.kegg.jp/) | Pathway membership | `/link/hsa/<pathway>` (free for academic use; see KEGG licence) |
-| [NCI GDC](https://gdc.cancer.gov/) | TCGA projects | 4 project IDs verified via the GDC API |
-| [Ensembl REST](https://rest.ensembl.org/) | Variant coordinates | 8 dbSNP IDs verified (GRCh38 position and alleles) |
-| [Disease Ontology](https://disease-ontology.org/) | Cancer identifiers | DOIDs for the 4 cancers |
+| PubMed (NCBI E-utilities) | Publication metadata | 86/86 PMIDs match on title and year (`scripts/fetch_pubmed.py`) |
+| NCBI Gene, HGNC | Gene IDs, symbols, HGNC IDs | 43/43 genes; each HGNC ID checked against the NCBI Gene ID |
+| UniProt | Protein accessions | 40/40 reviewed human entries for the stated gene |
+| KEGG | Pathway membership | 14/14 pathways match `/link/hsa` (free for academic use) |
+| Ensembl REST | Variant coordinates | 8/8 dbSNP IDs at the stated GRCh38 position |
+| Disease Ontology, Mondo (EBI OLS), WHO ICD-O-3 | Cancer identifiers | 4/4 Mondo IDs exist, are current and cross-reference the stored DOID |
+| cBioPortal (TCGA PanCancer Atlas) | Alteration counts | 645 rows for 43 genes x 5 cohorts x 3 alteration types; spot-checked against the TCGA marker papers |
+| CIViC (CC0) | External benchmark only | 34 of 58 associations matched; matching rules recorded per row |
 
-**Integrity rules followed.** No PMIDs or citations were invented. The curator's initial PMID list was
-checked against PubMed, and **11 discrepancies were found and corrected** (wrong PMIDs or title variants)
-before import. The PubMed record is the source of truth for metadata. Evidence summaries paraphrase each
-paper's main reported finding. Consistency annotations are curator judgements: `supports`, `mixed`,
-`conflicting`, or left blank (unknown). The two real documented disagreements included are ASCO
-guidance against CEA for colorectal-cancer screening, and the PLCO vs ERSPC PSA-screening trials. KEGG
-rows are labelled as database annotations without an evidence type, because gene membership in a disease
-map does not support a specific biomarker role. One association (CA 15-3 / breast / monitoring) is
-deliberately recorded as `pending_curation` with no evidence, to demonstrate the "insufficient" state.
-**No synthetic records are in the sample dataset.**
+No PMIDs or citations were invented; metadata comes from PubMed, not memory. Evidence summaries paraphrase each
+paper's main finding. Consistency annotations are curator judgements (`supports`, `mixed`, `conflicting`, or blank
+for unknown). KEGG rows are context-only database annotations. One association (CA 15-3 / breast / monitoring) is
+deliberately recorded without evidence to demonstrate the insufficient state. No synthetic records are present.
 
-Re-run the verification yourself (internet required):
-
-```bash
-cd backend
-python -m scripts.fetch_pubmed            # compare publications.csv with PubMed
-python -m scripts.verify_sources          # genes, proteins, variants, KEGG membership
-```
-
-## 10. Evidence scoring methodology
+## 10. Evidence-support score
 
 ```
-Score = 0.35·P + 0.25·D + 0.25·T + 0.15·C        (each component 0–100)
+Score = 0.35 P + 0.25 D + 0.25 T + 0.15 C        (each component 0-100; weights configurable, must sum to 1)
 ```
 
-| Component | Definition (n = distinct count) | Examples |
-|---|---|---|
-| **P** Publication support | `100·log2(1+n)/log2(1+cap)`, cap = 5, maximum 100 (diminishing returns) | n=1 → 38.7, 2 → 61.3, 3 → 77.4, ≥5 → 100 |
-| **D** Source diversity | `100·(1−0.5ⁿ)` over distinct source names | 1 → 50, 2 → 75, 3 → 87.5 |
-| **T** Evidence type | `0.7·max + 0.3·mean` of rubric values for the distinct labelled types | RCT + cohort → 92.75 |
-| **C** Consistency | `100·(supports + 0.5·mixed)/annotated` | 1 supports + 1 conflicting → 50 |
+| Component | Definition (n = distinct count) |
+|---|---|
+| P Publication support | `100 log2(1+n) / log2(1+cap)`, cap 5: diminishing returns |
+| D Source diversity | `100 (1 - 0.5^n)` over distinct supporting sources; context-only records are excluded |
+| T Evidence type | `100 (1 - (1 - b1) prod_{i>=2} (1 - lambda b_i))`, b = rubric/100 over distinct designs, lambda 0.25 |
+| C Consistency | `100 (supports + 0.5 mixed) / annotated` |
 
-Evidence-type rubric: meta-analysis 100, randomized clinical trial 95, clinical guideline 90, clinical
-trial 85, patient cohort 80, genomic profiling 65, experimental 55, review 40, computational prediction 20.
+Rubric: meta-analysis 100, randomised clinical trial 95, clinical guideline 90, clinical trial 85, patient cohort 80,
+genomic profiling 65, experimental 55, review 40, computational prediction 20. Weights and rubric are proposed
+project parameters, not validated clinical standards; section 13 measures how much they matter.
 
-**Weights and rubric values are proposed project parameters, not validated clinical standards.** Weights
-are configurable in `backend/.env` (`SCORE_WEIGHT_*`; they must sum to 1, and startup fails otherwise).
+Properties (all tested): a single design scores its rubric value; T lies between the strongest design and 100;
+adding a design never lowers T; adding a supporting record never lowers the overall score; duplicates never inflate
+it; the function is pure and deterministic.
 
-**Missing data.** A component with no observable input is `NULL` (unknown), never 0:
-- all four observed → **complete**: weighted sum;
-- observed weight ≥ 50% → **provisional**: `Σ(wᵢxᵢ)/Σwᵢ` over the observed components. The UI shows an
-  asterisk, a dashed outline, a warning and the missing components;
-- otherwise → **insufficient**: no overall score.
+Missing data: a component with no observable input is NULL (unknown). All four observed gives a complete score;
+observed weight of at least 50% gives a provisional score renormalised over observed weights; otherwise insufficient
+(no score). Current data: 55 complete, 2 provisional, 1 insufficient.
 
-**Determinism.** `app/scoring.compute_score` is a pure function (no clock, randomness or database
-access). Results are stored with `scoring_version = 1.0.0`.
+Worked example (unit-tested): three publications (RCT, cohort, genomic profiling), two sources, two "supports":
+P = 77.37, D = 75, T = 96.65, C = 100, score = 84.99 (version 1.0.0 gave 83.45).
 
-**Worked example (unit-tested).** Three publications (RCT, cohort, genomic profiling), two sources, two
-"supports" annotations → P = 77.37, D = 75, T = 90.5, C = 100 → **83.45**.
+## 11. Evidence-gap analysis and curation priority
 
-Current dataset: 55 complete, 2 provisional (PTEN loss, CDK12: consistency unknown), 1 insufficient (CA 15-3).
+Flags and severities: no evidence (5), role-evidence mismatch (4), inconsistent (3), few publications (2), single
+source (2), low score (2), untyped evidence (1), no consistency annotation (1), incomplete metadata (1).
 
-## 11. Evidence-gap analysis
+Role-evidence mismatch checks whether any recorded study design is of a kind the claimed role needs: predictive
+needs interventional evidence or a guideline; prognostic, risk and monitoring need patient outcome data; diagnostic
+additionally accepts tumour genomic profiling.
 
-Each association is checked for: `no_evidence`, `few_publications` (< threshold, default 2),
-`single_source`, `untyped_evidence`, `no_consistency_annotation`, `incomplete_metadata` (missing record
-ID, URL, retrieval date, or publication year/journal), `inconsistent` (curated mixed or conflicting
-evidence) and `low_score` (< 50 or not computable). The page supports filtering by flag, cancer and role;
-sorting; and CSV export. Gaps describe this database's records only: absence here is not absence in the
-literature.
+`curation priority = gap severity x (1 + 4 x min(TCGA frequency, 0.5))`.
 
-## 12. Installation and execution
+Gaps describe this database's records only; absence here is not absence in the literature.
 
-**Prerequisites:** Python 3.11+ (tested on 3.13), Node.js 18+ (tested on 24). PostgreSQL 14+ is optional.
+## 12. Genomic context: evidence versus prevalence
+
+For 16 single-gene biomarkers whose definition matches a gene-level alteration (`biomarker.prevalence_basis`), the
+database reports the TCGA frequency of that alteration in the association's cancer, with a 95% Wilson interval.
+Variant-specific biomarkers are marked as upper bounds. Protein, RNA, germline, fusion, signature and
+acquired-resistance biomarkers are deliberately excluded.
+
+The Evidence vs Prevalence page plots frequency against score. With thresholds 75 and 10%: 2 established, 7 common
+but thinly supported, 1 rare but well supported, 13 rare and thinly supported.
+
+## 13. Validation of the score
+
+* **External (CIViC)**: Spearman rho 0.47 between the score and the best CIViC level (permutation p = 0.006;
+  bootstrap 95% CI 0.17 to 0.70; n = 34). Mean score A 72.5, B 66.9, C 61.7.
+* **Coverage**: CIViC covers 0 of 4 serum-protein, 0 of 2 methylation and 0 of 3 genomic-signature associations.
+* **Robustness**: mean Spearman 0.91 between the baseline ranking and rankings under 1,000 random weightings;
+  78% of the top 10 retained. Ablation: source diversity and consistency carry little ranking information in the
+  current data.
+* **Version audit**: every association scored with 1.0.0 and 1.1.0, with the reason for each change.
+
+Details, including why version 1.0.0 had a slightly (not significantly) higher CIViC correlation, are in
+[docs/UPGRADES.md](docs/UPGRADES.md).
+
+## 14. Installation and execution
+
+Prerequisites: Python 3.11+ (tested on 3.13), Node.js 18+ (tested on 24). PostgreSQL 14+ optional (tested on 16).
 
 ### Backend
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
+source .venv/bin/activate              # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                  # SQLite by default
-python -m scripts.init_db             # migrate + import sample data + compute scores
+cp .env.example .env                   # SQLite by default
+python -m scripts.init_db              # migrate + import sample data + compute scores
 uvicorn app.main:app --reload --port 8000
 ```
 
-API: <http://127.0.0.1:8000/api> · Swagger UI: <http://127.0.0.1:8000/docs> · ReDoc: <http://127.0.0.1:8000/redoc>
+API: <http://127.0.0.1:8000/api>, Swagger UI: <http://127.0.0.1:8000/docs>.
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev                           # http://localhost:5173 (proxies /api to port 8000)
+npm run dev                            # http://localhost:5173 (proxies /api to port 8000)
 ```
 
-### Using PostgreSQL
+### PostgreSQL
 
 ```sql
 CREATE ROLE cancerbiomap LOGIN PASSWORD '<choose-a-password>';
 CREATE DATABASE cancerbiomap OWNER cancerbiomap;
 ```
 
-Set `DATABASE_URL=postgresql+psycopg://cancerbiomap:<password>@localhost:5432/cancerbiomap` in
-`backend/.env`, then run `python -m scripts.init_db`. Alternatively, apply
-`backend/sql/schema_postgresql.sql` with `psql` and then run the importer.
+Set `DATABASE_URL=postgresql+psycopg://cancerbiomap:<password>@localhost:5432/cancerbiomap` in `backend/.env` and run
+`python -m scripts.init_db`. On macOS with Homebrew, start the server with `LC_ALL` set (for example
+`LC_ALL=en_US.UTF-8 pg_ctl ... start`), otherwise PostgreSQL refuses to start.
 
-> Development note: in this build environment PostgreSQL was not installed, so the application and
-> tests were run on SQLite. The PostgreSQL DDL was generated from the same migration (Alembic offline
-> mode), and all SQL is written to be portable. Run the steps above once on a PostgreSQL server to
-> confirm before your demonstration.
+### Optional write protection
+
+Set `ADMIN_TOKEN` in `backend/.env` to require the `X-Admin-Token` header for real imports and score recomputation.
 
 ### Reset
 
@@ -426,111 +374,94 @@ Set `DATABASE_URL=postgresql+psycopg://cancerbiomap:<password>@localhost:5432/ca
 python -m scripts.init_db --reset      # SQLite only: recreate the database file
 ```
 
-## 13. API documentation
+## 15. API
 
-Interactive documentation is generated by FastAPI at `/docs`. Main endpoints:
+Interactive documentation at `/docs`. Main endpoints:
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/dashboard/stats?cancer_id&role&evidence_type` | Dashboard statistics (computed live) |
-| GET | `/api/biomarkers?q&cancer_id&biomarker_type&role&sort&order&page&page_size` | Search/filter/sort/paginate |
-| GET | `/api/biomarkers/{id}` | Detail: genes, proteins, pathways, variants, associations, evidence, scores |
-| GET | `/api/cancers`, `/api/cancers/{id}`, `/api/cancers/compare?a&b` | Cancer list, detail, comparison |
-| GET | `/api/genes`, `/api/proteins`, `/api/pathways`, `/api/variants` (+ `/{id}`) | Entity browsing |
-| GET | `/api/publications?q&biomarker_id&cancer_id&year_from&year_to&evidence_type` | Research evidence |
-| GET | `/api/associations`, `/api/associations/{id}` | Association, evidence, live score explanation, gaps |
-| GET | `/api/scores/methodology` · POST `/api/scores/recompute` | Method description; recalculation |
-| GET | `/api/gaps?flag&cancer_id&role&min_publications&sort&order` | Evidence-gap analysis |
-| GET | `/api/analytics/catalogue`, `/api/analytics/{report}` | SQL query catalogue and execution |
-| GET | `/api/network?biomarker_id` or `?cancer_id` | Relationship graph built from DB links |
-| GET | `/api/export/{biomarkers,publications,associations,gaps,analytics}` | CSV export with the same filters |
-| POST | `/api/import/{entity}?dry_run=true` | Validated CSV upload (max 5 MB) |
+| GET | `/api/dashboard/stats` | Dashboard statistics |
+| GET | `/api/biomarkers`, `/api/biomarkers/{id}` | Search, filter, sort, paginate; detail with evidence, scores, TCGA frequency, CIViC level |
+| GET | `/api/cancers`, `/api/cancers/{id}`, `/api/cancers/compare` | Cancer list, detail (cohorts, most altered genes), comparison |
+| GET | `/api/genes`, `/api/proteins`, `/api/pathways`, `/api/variants` | Entity browsing; gene detail includes TCGA frequencies |
+| GET | `/api/publications` | Research evidence |
+| GET | `/api/associations`, `/api/associations/{id}` | Association, evidence, live score explanation, 1.0.0 score, gaps |
+| GET | `/api/scores/methodology`, `/api/scores/comparison`, `/api/scores/robustness` | Method; version audit; weight robustness |
+| GET | `/api/validation/civic` | Concordance with CIViC |
+| GET | `/api/prevalence/discordance`, `/api/cohorts` | Evidence versus prevalence; TCGA cohorts |
+| GET | `/api/gaps` | Gap analysis with severity and curation priority |
+| GET | `/api/analytics/catalogue`, `/api/analytics/{report}` | SQL report catalogue and execution |
+| GET | `/api/network` | Relationship graph built from database links |
+| GET | `/api/export/{dataset}` | CSV export |
+| POST | `/api/import/{entity}`, `/api/scores/recompute` | Validated CSV import (dry run by default); recompute (token if configured) |
 
-Errors use one structure, `{"error": {"code", "message", "details"}}`, with status 400, 404, 422 or 500.
-Internal exceptions and SQL are never returned to the client.
+Errors use `{"error": {"code", "message", "details"}}` with status 400, 401, 404, 422 or 500. Internal exceptions and
+SQL are never returned.
 
-## 14. Example SQL queries
+## 16. SQL: views and report catalogue
 
-All nine reports are in [backend/sql/query_catalogue.sql](backend/sql/query_catalogue.sql) and on the
-*SQL Analytics* page. Two examples:
+Views (`app/views.py`, migration 0003): `v_tcga_frequency` (pooled frequency per gene, cancer and alteration type)
+and `v_association_prevalence` (each association with the frequency of its defining alteration). Twelve documented,
+parameterised reports run from the SQL Analytics page; all are listed with their SQL in
+[backend/sql/query_catalogue.sql](backend/sql/query_catalogue.sql). Example:
 
 ```sql
--- Shared biomarkers between two cancers (set intersection)
-SELECT b.biomarker_id, b.name
-FROM biomarker b
-WHERE b.biomarker_id IN (
-    SELECT biomarker_id FROM biomarker_cancer WHERE cancer_id = :cancer_a
-    INTERSECT
-    SELECT biomarker_id FROM biomarker_cancer WHERE cancer_id = :cancer_b);
-
--- Associations with limited evidence (LEFT JOIN keeps associations with none)
-SELECT bc.association_id, b.name, c.name, bc.biomarker_role,
-       COUNT(DISTINCT e.publication_id) AS n_publications
-FROM biomarker_cancer bc
-JOIN biomarker b ON b.biomarker_id = bc.biomarker_id
-JOIN cancer c    ON c.cancer_id = bc.cancer_id
-LEFT JOIN evidence e ON e.association_id = bc.association_id
-GROUP BY bc.association_id, b.name, c.name, bc.biomarker_role
-HAVING COUNT(DISTINCT e.publication_id) < :max_publications;
+-- Common alterations with thin recorded evidence (curation priority)
+SELECT ap.biomarker, ap.cancer, ap.biomarker_role, ap.official_symbol,
+       100 * ap.frequency AS percent_altered, s.overall_score, s.score_status
+FROM v_association_prevalence ap
+JOIN evidence_score s ON s.association_id = ap.association_id AND s.scoring_version = :scoring_version
+WHERE ap.frequency >= :min_frequency AND (s.overall_score IS NULL OR s.overall_score < :max_score)
+ORDER BY ap.frequency DESC, ap.association_id;
 ```
 
-## 15. Testing methodology and results
+Rounding is done in Python, not SQL, because PostgreSQL has no `ROUND(double precision, int)`.
+
+## 17. Testing
 
 ```bash
-cd backend  && python -m pytest -q        # 51 tests
-cd frontend && npm test                   # 9 tests
+cd backend  && python -m pytest -q        # 80 tests
+cd frontend && npm test                   # 15 tests
 ```
 
-| Area | Tests (file) | Manually verified case |
-|---|---|---|
-| Scoring | `test_scoring.py` (12) | Hand-calculated score of 83.45; provisional renormalisation; insufficient state; duplicates not double-counted; determinism |
-| Schema | `test_database.py` (12) | FK violation rejected; duplicate gene/PMID/association rejected; CHECK vocabularies; cascade delete; Cancer→Biomarker→Gene→Protein→Pathway→Publication navigation; Alembic migration produces the model's tables |
-| Import | `test_import.py` (10) | Sample counts (47/4/84/58/43); re-import inserts 0; row-numbered errors; atomic rollback; dry run; FK lookups; allele/chromosome validation |
-| API | `test_api.py` (17) | EGFR search returns exactly the 2 EGFR biomarkers; breast ∩ colorectal = {HER2}; CA 15-3 flagged with no score; CEA conflict reported; analytics results; CSV export; import endpoint; 404/422 error format |
-| Frontend | `src/test/app.test.tsx` (9) | Unknown component rendered as "unknown", not 0; provisional warning; deterministic network layout; query building |
+| Area | Examples of what is tested |
+|---|---|
+| Scoring | Hand-calculated cases; provisional and insufficient states; duplicates; determinism; randomised monotonicity and bounds; the frozen 1.0.0 results; the KEGG correction |
+| Schema and migrations | FK, UNIQUE and CHECK enforcement; cascades; migrations up, down and up again including views; model-migration equality |
+| Import | Sample counts; idempotent re-import; row-numbered errors; atomic rollback; ontology ID formats; prevalence count rules; prevalence basis needs one gene |
+| API | Search, filters, pagination, details, gaps v2 and the curation loop, prevalence pooling versus the SQL view, robustness determinism, CIViC statistics, version comparison, new reports, write guard, error format |
+| Frontend | Unknown rendered as unknown; provisional warning; network layout; frequency formatting; upper-bound marking; CIViC badge; quadrant grouping; accessible rank intervals |
 
-**Results at submission: 51/51 backend and 9/9 frontend tests passing.** The production build
-(`npm run build`) also succeeds. The application was run end to end (FastAPI + Vite proxy) and the
-main pages were checked in a browser.
+Portability: every read endpoint (190 requests) returns identical JSON on SQLite and PostgreSQL 16.
 
-## 16. Project structure
+## 18. Project structure
 
 ```
 backend/
-  app/            config, database, models (schema), vocab, scoring (pure), main (FastAPI)
-    routers/      catalog.py (browse/search), evidence.py (scores, gaps, analytics, import/export)
-    services/     queries, scores, gaps, analytics (SQL catalogue), importer
-  alembic/        migration environment + versions/0001_initial_schema.py
-  data/sample/    curated CSVs (+ kegg_membership.json cache)
-  scripts/        init_db.py, fetch_pubmed.py, verify_sources.py
-  sql/            schema_postgresql.sql, query_catalogue.sql
-  tests/          pytest suite
-frontend/
-  src/api         typed client + response types
-  src/components  layout, UI kit, charts, score breakdown, network graph, evidence list
-  src/pages       dashboard, explorers, detail pages, gaps, analytics, methodology, import, about
-docs/             VIVA_QUESTIONS.md, DATA_CURATION.md
+  app/          config, database, models, vocab, views, security, scoring (pure), scoring_legacy (frozen 1.0.0),
+                robustness (pure), main
+    routers/    catalog (browse/search), evidence (scores, gaps, analytics, import/export), analysis (1.1 features)
+    services/   queries, scores, gaps, prevalence, validation, analytics (SQL catalogue), importer
+  alembic/      0001 initial schema, 0002 genomic context and ontologies, 0003 views
+  data/sample/  curated and fetched CSVs
+  scripts/      init_db, fetch_pubmed, verify_sources, fetch_ontologies, fetch_prevalence, fetch_civic, export_sql
+  sql/          schema_postgresql.sql, query_catalogue.sql (both generated)
+  tests/        pytest suite
+frontend/src/
+  api/          typed client and response types
+  components/   layout, UI kit, charts, score breakdown, network graph, evidence list, genomic badges
+  pages/        dashboard, explorers, details, gaps, evidence vs prevalence, score validation, analytics, methodology,
+                import, about
+docs/           UPGRADES.md, PROJECT_GUIDE.md, VIVA_QUESTIONS.md, DATA_CURATION.md
 ```
 
-## 17. Limitations
+## 19. Limitations and future work
 
-- Small, teaching-scale sample (47 biomarkers, 4 cancers). Landmark positive studies were selected,
-  so consistency is skewed towards "supports". The scores reflect curation effort, not the total literature.
-- Weights and the rubric are proposed parameters with no empirical calibration. Do not use the score
-  for clinical or regulatory decisions.
-- Evidence types and consistency annotations are single-curator judgements, with no inter-annotator
-  agreement measured.
-- Source diversity treats sources by name. Two sources derived from the same study (for example, TCGA
-  data and a TCGA paper) are not fully independent.
-- Live API retrieval is used for verification/enrichment scripts, not for automatic ingestion of new
-  associations.
-- Developed and tested on SQLite. PostgreSQL DDL was generated but not executed in this environment.
+Limitations: 47 biomarkers and 4 cancers selected for teaching; landmark positive studies dominate, so source
+diversity and consistency carry little information; weights and rubric are proposed parameters (their influence is
+measured, not calibrated); single-curator annotations; CIViC matching at gene or curated-keyword level; TCGA
+frequencies are cohort-wide and gene-level.
 
-## 18. Future scope
-
-- Ingest evidence from CIViC (open licence) with record-level provenance, and map evidence levels into
-  the rubric.
-- Multi-curator annotation with agreement statistics (Cohen's kappa) and an audit log.
-- Sensitivity analysis of the weights (rank stability under weight perturbation).
-- Authentication and role-based editing; full-text search (PostgreSQL `tsvector`).
-- More cancers via GDC project expansion; variant normalisation with HGVS validation.
+Future work: ingest CIViC and ClinVar evidence as independent sources (with care to keep a held-out benchmark);
+curate negative and mixed evidence deliberately; subtype-aware and variant-level frequencies; multi-curator
+annotation with inter-annotator agreement; therapy linkage from FDA labels; authentication with curator roles.

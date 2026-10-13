@@ -23,11 +23,14 @@ from sqlalchemy.orm import Session
 
 from app import models as m
 from app.vocab import (
+    ALTERATION_TYPES,
     BIOMARKER_ROLES,
     BIOMARKER_TYPES,
+    CIVIC_EVIDENCE_LEVELS,
     CONSISTENCY_VALUES,
     EVIDENCE_TYPES,
     PATHWAY_DATABASES,
+    PREVALENCE_BASES,
     SOURCE_STATUSES,
 )
 
@@ -44,6 +47,9 @@ ENTITY_ORDER = (
     "evidence",
     "evidence_kegg",
     "variants",
+    "cohorts",
+    "genomic_prevalence",
+    "external_benchmarks",
 )
 
 
@@ -85,8 +91,25 @@ class CancerRow(Row):
     tissue_origin: str | None = None
     cancer_category: str | None = None
     external_identifier: str | None = None
+    mondo_id: str | None = None
+    icdo_topography: str | None = None
     gdc_project_id: str | None = None
     description: str | None = None
+
+    @field_validator("mondo_id")
+    @classmethod
+    def _mondo(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"MONDO:\d{7}", v):
+            raise ValueError("mondo_id must look like MONDO:0007254")
+        return v
+
+    @field_validator("icdo_topography")
+    @classmethod
+    def _icdo(cls, v: str | None) -> str | None:
+        # One or more ICD-O-3 topography codes or ranges, e.g. C50, C34.1, C18-C20
+        if v is not None and not re.fullmatch(r"C\d{2}(\.\d)?(-C\d{2}(\.\d)?)?(;C\d{2}(\.\d)?(-C\d{2}(\.\d)?)?)*", v):
+            raise ValueError("icdo_topography must be ICD-O-3 topography code(s) such as C50 or C18-C20")
+        return v
 
     @field_validator("code")
     @classmethod
@@ -101,7 +124,15 @@ class GeneRow(Row):
     full_name: str | None = None
     organism: str = "Homo sapiens"
     ncbi_gene_id: int | None = None
+    hgnc_id: str | None = None
     description: str | None = None
+
+    @field_validator("hgnc_id")
+    @classmethod
+    def _hgnc(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"HGNC:\d+", v):
+            raise ValueError("hgnc_id must look like HGNC:1100")
+        return v
 
     @field_validator("official_symbol")
     @classmethod
@@ -188,6 +219,7 @@ class BiomarkerRow(Row):
     name: str
     biomarker_type: str
     gene_symbols: str | None = None
+    prevalence_basis: str | None = None
     description: str | None = None
     biological_function: str | None = None
     external_identifier: str | None = None
@@ -196,6 +228,18 @@ class BiomarkerRow(Row):
     @classmethod
     def _type(cls, v: str) -> str:
         return _choice(v, BIOMARKER_TYPES, "biomarker_type")
+
+    @field_validator("prevalence_basis")
+    @classmethod
+    def _basis(cls, v: str | None) -> str | None:
+        return _choice(v, PREVALENCE_BASES, "prevalence_basis", required=False)
+
+    @model_validator(mode="after")
+    def _basis_needs_one_gene(self) -> "BiomarkerRow":
+        # A gene-level frequency only describes a biomarker that is defined by exactly one gene.
+        if self.prevalence_basis and len(self.symbols) != 1:
+            raise ValueError("prevalence_basis can only be set for a biomarker with exactly one gene symbol")
+        return self
 
     @property
     def symbols(self) -> list[str]:
@@ -335,6 +379,81 @@ class VariantRow(Row):
         return keys
 
 
+class CohortRow(Row):
+    study_id: str
+    name: str
+    cancer_code: str
+    source_name: str = "cBioPortal"
+    n_samples_mutation: int | None = None
+    n_samples_cna: int | None = None
+    citation: str | None = None
+    source_url: str | None = None
+    retrieved_at: datetime | None = None
+
+    @field_validator("n_samples_mutation", "n_samples_cna")
+    @classmethod
+    def _nonneg(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("sample counts must be non-negative")
+        return v
+
+    @field_validator("retrieved_at")
+    @classmethod
+    def _tz(cls, v: datetime | None) -> datetime | None:
+        return v.replace(tzinfo=timezone.utc) if v is not None and v.tzinfo is None else v
+
+
+class PrevalenceRow(Row):
+    gene_symbol: str
+    study_id: str
+    alteration_type: str
+    altered_cases: int
+    profiled_cases: int
+
+    @field_validator("alteration_type")
+    @classmethod
+    def _atype(cls, v: str) -> str:
+        return _choice(v, ALTERATION_TYPES, "alteration_type")
+
+    @model_validator(mode="after")
+    def _counts(self) -> "PrevalenceRow":
+        if self.altered_cases < 0 or self.profiled_cases <= 0:
+            raise ValueError("altered_cases must be >= 0 and profiled_cases > 0")
+        if self.altered_cases > self.profiled_cases:
+            raise ValueError("altered_cases cannot exceed profiled_cases")
+        return self
+
+
+class BenchmarkRow(Row):
+    biomarker_code: str
+    cancer_code: str
+    biomarker_role: str
+    benchmark_source: str
+    best_evidence_level: str | None = None
+    n_items: int = 0
+    n_shared_publications: int = 0
+    matched_on: str | None = None
+    retrieved_at: datetime | None = None
+
+    @field_validator("best_evidence_level")
+    @classmethod
+    def _level(cls, v: str | None) -> str | None:
+        return _choice(v, CIVIC_EVIDENCE_LEVELS, "best_evidence_level", required=False)
+
+    @field_validator("retrieved_at")
+    @classmethod
+    def _tz(cls, v: datetime | None) -> datetime | None:
+        return v.replace(tzinfo=timezone.utc) if v is not None and v.tzinfo is None else v
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "BenchmarkRow":
+        if self.n_items < 0 or self.n_shared_publications < 0:
+            raise ValueError("counts must be non-negative")
+        if (self.n_items == 0) != (self.best_evidence_level is None):
+            raise ValueError("best_evidence_level must be present exactly when n_items > 0")
+        return self
+
+
 ROW_MODELS: dict[str, type[Row]] = {
     "cancers": CancerRow,
     "genes": GeneRow,
@@ -348,6 +467,9 @@ ROW_MODELS: dict[str, type[Row]] = {
     "evidence": EvidenceRow,
     "evidence_kegg": EvidenceRow,
     "variants": VariantRow,
+    "cohorts": CohortRow,
+    "genomic_prevalence": PrevalenceRow,
+    "external_benchmarks": BenchmarkRow,
 }
 
 NATURAL_KEYS: dict[str, tuple[str, ...]] = {
@@ -363,6 +485,9 @@ NATURAL_KEYS: dict[str, tuple[str, ...]] = {
     "evidence": ("biomarker_code", "cancer_code", "biomarker_role", "pmid", "source_name", "source_record_id"),
     "evidence_kegg": ("biomarker_code", "cancer_code", "biomarker_role", "pmid", "source_name", "source_record_id"),
     "variants": ("variant_identifier",),
+    "cohorts": ("study_id",),
+    "genomic_prevalence": ("gene_symbol", "study_id", "alteration_type"),
+    "external_benchmarks": ("biomarker_code", "cancer_code", "biomarker_role", "benchmark_source"),
 }
 
 
@@ -658,6 +783,44 @@ def _h_variant(db: Session, r: VariantRow, rep: ImportReport) -> None:
         obj.associations = assocs
 
 
+def _h_cohort(db: Session, r: CohortRow, rep: ImportReport) -> None:
+    ca = db.scalars(select(m.Cancer).filter_by(code=r.cancer_code)).first()
+    if ca is None:
+        raise ImportError_(f"Unknown cancer_code '{r.cancer_code}'")
+    db.flush()
+    obj, new = _get_or_new(db, m.Cohort, study_id=r.study_id)
+    values = r.model_dump(exclude={"study_id", "cancer_code"})
+    values["cancer_id"] = ca.cancer_id
+    if not new and obj.retrieved_at and values["retrieved_at"] and \
+            obj.retrieved_at.replace(tzinfo=None) == values["retrieved_at"].replace(tzinfo=None):
+        values["retrieved_at"] = obj.retrieved_at
+    _apply(obj, values, rep, new)
+
+
+def _h_prevalence(db: Session, r: PrevalenceRow, rep: ImportReport) -> None:
+    gene = _gene(db, r.gene_symbol)
+    cohort = db.scalars(select(m.Cohort).filter_by(study_id=r.study_id)).first()
+    if cohort is None:
+        raise ImportError_(f"Unknown study_id '{r.study_id}' (import cohorts first)")
+    db.flush()
+    obj, new = _get_or_new(db, m.GenomicPrevalence, gene_id=gene.gene_id, cohort_id=cohort.cohort_id,
+                           alteration_type=r.alteration_type)
+    _apply(obj, {"altered_cases": r.altered_cases, "profiled_cases": r.profiled_cases}, rep, new)
+
+
+def _h_benchmark(db: Session, r: BenchmarkRow, rep: ImportReport) -> None:
+    assoc = _association(db, r.biomarker_code, r.cancer_code, r.biomarker_role)
+    db.flush()
+    obj, new = _get_or_new(db, m.ExternalBenchmark, association_id=assoc.association_id,
+                           benchmark_source=r.benchmark_source)
+    values = r.model_dump(include={"best_evidence_level", "n_items", "n_shared_publications", "matched_on",
+                                   "retrieved_at"})
+    if not new and obj.retrieved_at and values["retrieved_at"] and \
+            obj.retrieved_at.replace(tzinfo=None) == values["retrieved_at"].replace(tzinfo=None):
+        values["retrieved_at"] = obj.retrieved_at
+    _apply(obj, values, rep, new)
+
+
 _HANDLERS = {
     "cancers": _h_cancer,
     "genes": _h_gene,
@@ -671,4 +834,7 @@ _HANDLERS = {
     "evidence": _h_evidence,
     "evidence_kegg": _h_evidence,
     "variants": _h_variant,
+    "cohorts": _h_cohort,
+    "genomic_prevalence": _h_prevalence,
+    "external_benchmarks": _h_benchmark,
 }

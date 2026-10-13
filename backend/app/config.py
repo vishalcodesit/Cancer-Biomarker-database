@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     score_weight_consistency: float = 0.15
     score_publication_cap: int = 5
     score_min_coverage: float = 0.5
+    score_breadth_discount: float = 0.25
+
+    # Optional shared secret for write endpoints (CSV import with dry_run=false, score recompute).
+    # When set, requests must send it in the X-Admin-Token header. When empty, writes stay open (local demo).
+    admin_token: str = ""
 
     ncbi_email: str = ""
     ncbi_api_key: str = ""
@@ -36,6 +41,8 @@ class Settings(BaseSettings):
             raise ValueError(f"Evidence score weights must sum to 1.0 (got {total:.4f})")
         if self.score_publication_cap < 1:
             raise ValueError("SCORE_PUBLICATION_CAP must be >= 1")
+        if not 0.0 <= self.score_breadth_discount <= 1.0:
+            raise ValueError("SCORE_BREADTH_DISCOUNT must be between 0 and 1")
         return self
 
     @property

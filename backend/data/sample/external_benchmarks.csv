@@ -1,0 +1,59 @@
+biomarker_code,cancer_code,biomarker_role,benchmark_source,best_evidence_level,n_items,n_shared_publications,matched_on,retrieved_at
+CBM-001,breast,risk,CIViC,C,2,0,genes BRCA1; gene level; diseases Breast Cancer,2026-10-13
+CBM-001,breast,predictive,CIViC,A,9,2,"genes BRCA1; gene level; diseases Breast Cancer, Breast Carcinoma, HER2 Negative Breast Cancer, Triple-negative Breast Cancer",2026-10-13
+CBM-002,breast,risk,CIViC,C,2,0,genes BRCA2; gene level; diseases Breast Cancer,2026-10-13
+CBM-002,breast,predictive,CIViC,A,8,2,"genes BRCA2; gene level; diseases Breast Cancer, Breast Carcinoma, HER2 Negative Breast Cancer, Triple-negative Breast Cancer",2026-10-13
+CBM-002,prostate,predictive,CIViC,A,4,2,"genes BRCA2; gene level; diseases Castration-resistant Prostate Carcinoma, Prostate Cancer",2026-10-13
+CBM-002,prostate,risk,CIViC,,0,0,genes BRCA2; gene level; diseases none,2026-10-13
+CBM-003,breast,prognostic,CIViC,,0,0,genes ERBB2; profile contains amplification|overexpression|expression; diseases none,2026-10-13
+CBM-003,breast,predictive,CIViC,A,30,1,"genes ERBB2; profile contains amplification|overexpression|expression; diseases Breast Cancer, HER2 Positive Breast Cancer",2026-10-13
+CBM-003,colorectal,predictive,CIViC,B,9,1,genes ERBB2; profile contains amplification|overexpression|expression; diseases Colorectal Cancer,2026-10-13
+CBM-004,breast,predictive,CIViC,B,1,0,genes ESR1; profile contains expression|positive; diseases Breast Cancer,2026-10-13
+CBM-005,breast,predictive,CIViC,,0,0,genes PGR; profile contains expression|positive; diseases none,2026-10-13
+CBM-006,breast,prognostic,CIViC,B,1,0,genes MKI67; profile contains expression; diseases Breast Cancer,2026-10-13
+CBM-007,breast,predictive,CIViC,A,71,1,"genes PIK3CA; gene level; diseases Breast Cancer, HER2 Negative Breast Cancer, HER2 Positive Breast Cancer",2026-10-13
+CBM-008,breast,predictive,CIViC,A,12,3,genes ESR1; profile contains y537|d538|e380|l536|mutation; diseases Breast Cancer,2026-10-13
+CBM-009,breast,prognostic,CIViC,B,10,0,genes TP53; gene level; diseases Breast Cancer,2026-10-13
+CBM-010,breast,risk,CIViC,,0,0,genes PALB2; gene level; diseases none,2026-10-13
+CBM-011,breast,risk,CIViC,,0,0,genes CHEK2; gene level; diseases none,2026-10-13
+CBM-012,breast,monitoring,CIViC,,0,0,genes MUC1; gene level; diseases none,2026-10-13
+CBM-013,breast,prognostic,CIViC,B,4,0,genes ESR1/PGR/ERBB2/MKI67; gene level; diseases Breast Cancer,2026-10-13
+CBM-014,breast,prognostic,CIViC,,0,0,genes ; gene level; diseases none,2026-10-13
+CBM-015,breast,prognostic,CIViC,B,4,0,genes ESR1/PGR/ERBB2/MKI67; gene level; diseases Breast Cancer,2026-10-13
+CBM-016,breast,diagnostic,CIViC,,0,0,genes CDH1; profile contains loss|mutation|expression; diseases none,2026-10-13
+CBM-017,nsclc,predictive,CIViC,A,67,1,"genes EGFR; profile contains l858r|exon 19|e746|sensitizing; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-018,nsclc,predictive,CIViC,A,31,3,"genes EGFR; profile contains t790m; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-019,nsclc,predictive,CIViC,A,82,2,"genes ALK/EML4; profile contains fusion|rearrangement|eml4; diseases Lung Acinar Adenocarcinoma, Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-020,nsclc,predictive,CIViC,A,23,1,"genes ROS1; profile contains fusion|rearrangement; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-021,nsclc,predictive,CIViC,A,3,1,genes KRAS; profile contains g12c; diseases Lung Non-small Cell Carcinoma,2026-10-13
+CBM-022,colorectal,predictive,CIViC,A,66,3,genes KRAS; profile contains g12|g13|exon 2|mutation; diseases Colorectal Cancer,2026-10-13
+CBM-023,colorectal,predictive,CIViC,A,15,0,genes NRAS; gene level; diseases Colorectal Cancer,2026-10-13
+CBM-024,colorectal,predictive,CIViC,A,27,1,genes BRAF; profile contains v600e; diseases Colorectal Cancer,2026-10-13
+CBM-024,nsclc,predictive,CIViC,A,2,0,genes BRAF; profile contains v600e; diseases Lung Non-small Cell Carcinoma,2026-10-13
+CBM-025,nsclc,predictive,CIViC,A,9,1,"genes MET; profile contains exon 14; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-026,nsclc,predictive,CIViC,A,11,1,"genes RET; profile contains fusion|rearrangement; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-027,nsclc,predictive,CIViC,B,6,1,genes CD274; profile contains expression; diseases Lung Non-small Cell Carcinoma,2026-10-13
+CBM-028,nsclc,predictive,CIViC,,0,0,genes ; gene level; diseases none,2026-10-13
+CBM-029,nsclc,predictive,CIViC,B,2,1,"genes STK11; gene level; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-030,nsclc,predictive,CIViC,C,9,0,"genes NTRK1/NTRK2/NTRK3; profile contains fusion; diseases Lung Adenocarcinoma, Lung Non-small Cell Carcinoma",2026-10-13
+CBM-030,colorectal,predictive,CIViC,C,5,0,"genes NTRK1/NTRK2/NTRK3; profile contains fusion; diseases Colorectal Adenocarcinoma, Colorectal Cancer",2026-10-13
+CBM-031,colorectal,predictive,CIViC,,0,0,genes MLH1/MSH2; gene level; diseases none,2026-10-13
+CBM-031,colorectal,diagnostic,CIViC,,0,0,genes MLH1/MSH2; gene level; diseases none,2026-10-13
+CBM-032,colorectal,risk,CIViC,,0,0,genes MLH1; gene level; diseases none,2026-10-13
+CBM-033,colorectal,risk,CIViC,,0,0,genes MSH2; gene level; diseases none,2026-10-13
+CBM-034,colorectal,risk,CIViC,,0,0,genes APC; gene level; diseases none,2026-10-13
+CBM-035,colorectal,monitoring,CIViC,,0,0,genes CEACAM5; gene level; diseases none,2026-10-13
+CBM-035,colorectal,diagnostic,CIViC,,0,0,genes CEACAM5; gene level; diseases none,2026-10-13
+CBM-036,colorectal,diagnostic,CIViC,,0,0,genes SEPTIN9; gene level; diseases none,2026-10-13
+CBM-037,colorectal,diagnostic,CIViC,,0,0,genes KRAS/NDRG4/BMP3; gene level; diseases none,2026-10-13
+CBM-038,prostate,diagnostic,CIViC,,0,0,genes KLK3; gene level; diseases none,2026-10-13
+CBM-039,prostate,diagnostic,CIViC,B,1,1,genes TMPRSS2/ERG; profile contains fusion|tmprss2; diseases Prostate Carcinoma,2026-10-13
+CBM-040,prostate,diagnostic,CIViC,,0,0,genes PCA3; gene level; diseases none,2026-10-13
+CBM-041,prostate,predictive,CIViC,B,4,1,genes AR; profile contains v7|splice; diseases Prostate Cancer,2026-10-13
+CBM-042,prostate,prognostic,CIViC,,0,0,genes AR; profile contains amplification; diseases none,2026-10-13
+CBM-043,prostate,prognostic,CIViC,B,2,0,"genes PTEN; profile contains loss|deletion|mutation; diseases Prostate Adenocarcinoma, Prostate Cancer",2026-10-13
+CBM-044,prostate,diagnostic,CIViC,,0,0,genes AMACR; gene level; diseases none,2026-10-13
+CBM-045,prostate,diagnostic,CIViC,,0,0,genes SPOP; gene level; diseases none,2026-10-13
+CBM-046,prostate,predictive,CIViC,A,1,0,genes CDK12; gene level; diseases Castration-resistant Prostate Carcinoma,2026-10-13
+CBM-047,prostate,predictive,CIViC,A,4,2,"genes ATM; gene level; diseases Castration-resistant Prostate Carcinoma, Prostate Cancer",2026-10-13
+CBM-047,prostate,risk,CIViC,,0,0,genes ATM; gene level; diseases none,2026-10-13

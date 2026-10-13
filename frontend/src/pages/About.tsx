@@ -1,13 +1,17 @@
 import { Card, Disclaimer, ExternalLink, PageHeader, SourceStatusBadge } from "../components/ui";
 
 const SOURCES = [
-  { name: "PubMed (NCBI E-utilities)", url: "https://pubmed.ncbi.nlm.nih.gov/", use: "Publication titles, authors, journals, years and DOIs for all 84 curated PMIDs were retrieved and verified with esummary." },
+  { name: "PubMed (NCBI E-utilities)", url: "https://pubmed.ncbi.nlm.nih.gov/", use: "Publication titles, authors, journals, years and DOIs for all 86 curated PMIDs were retrieved and verified with esummary." },
   { name: "NCBI Gene", url: "https://www.ncbi.nlm.nih.gov/gene/", use: "Gene IDs and official symbols verified with E-utilities esummary." },
   { name: "UniProt", url: "https://www.uniprot.org/", use: "Reviewed human protein accessions verified with the UniProt REST API." },
   { name: "KEGG", url: "https://www.kegg.jp/", use: "Pathway gene membership retrieved through KEGG REST (/link/hsa), free for academic use." },
   { name: "NCI Genomic Data Commons", url: "https://gdc.cancer.gov/", use: "TCGA project identifiers (TCGA-BRCA, -LUAD, -COAD, -PRAD) verified through the GDC API." },
   { name: "Ensembl REST / dbSNP", url: "https://rest.ensembl.org/", use: "GRCh38 coordinates and alleles of dbSNP variants verified." },
   { name: "Disease Ontology", url: "https://disease-ontology.org/", use: "Cancer identifiers (DOID)." },
+  { name: "Mondo Disease Ontology (EBI OLS)", url: "https://www.ebi.ac.uk/ols4/ontologies/mondo", use: "Mondo IDs for the 4 cancers, each verified through OLS to cross-reference the stored DOID. ICD-O-3 topography codes are curator-assigned from WHO ICD-O-3." },
+  { name: "HGNC", url: "https://www.genenames.org/", use: "HGNC IDs for all 43 genes, each checked against the stored NCBI Gene ID." },
+  { name: "cBioPortal (TCGA PanCancer Atlas)", url: "https://www.cbioportal.org/", use: "Raw counts of tumours with a somatic mutation, amplification or deep deletion in each curated gene, for 5 TCGA cohorts (BRCA, LUAD, LUSC, COADREAD, PRAD)." },
+  { name: "CIViC", url: "https://civicdb.org/", use: "Accepted expert evidence items (CC0), used only to validate the evidence-support score, never to compute it." },
 ];
 
 export default function About() {

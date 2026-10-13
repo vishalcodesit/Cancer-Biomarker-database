@@ -78,3 +78,64 @@ describe("network layout", () => {
     expect(screen.getByText("Provisional")).toBeInTheDocument();
   });
 });
+
+// --------------------------------------------------------------------------- version 1.1 components
+import type { DiscordanceItem, RobustnessItem, TcgaFrequency } from "../api/types";
+import { CivicBadge, FrequencyLabel, TcgaPanel } from "../components/genomic";
+import { formatFrequency } from "../lib/format";
+import { quadrantPoints } from "../pages/Prevalence";
+import { RankInterval } from "../pages/Validation";
+
+const kras: TcgaFrequency = {
+  gene_symbol: "KRAS", alteration_type: "somatic_mutation", basis: "somatic_mutation_upper_bound", upper_bound: true,
+  altered_cases: 218, profiled_cases: 534, frequency: 0.4082, ci95_low: 0.367, ci95_high: 0.451,
+  cohorts: ["coadread_tcga_pan_can_atlas_2018"], source: "cBioPortal",
+};
+
+describe("genomic context", () => {
+  it("formats frequencies without ever showing a small non-zero value as 0", () => {
+    expect(formatFrequency(0.4082)).toBe("40.8%");
+    expect(formatFrequency(0.0004)).toBe("0.04%");
+    expect(formatFrequency(0)).toBe("0.0%");
+    expect(formatFrequency(null)).toBe("n/a");
+  });
+  it("marks gene-level frequencies of variant-specific biomarkers as upper bounds", () => {
+    render(<FrequencyLabel t={kras} />);
+    expect(screen.getByText("≤ 40.8%")).toBeInTheDocument();
+    expect(screen.getByText(/218\/534 tumours/)).toBeInTheDocument();
+  });
+  it("explains when no TCGA frequency applies instead of showing zero", () => {
+    render(<TcgaPanel t={null} />);
+    expect(screen.getByText(/No gene-level TCGA frequency applies/)).toBeInTheDocument();
+  });
+  it("shows the CIViC level with its meaning, or that the association is not in CIViC", () => {
+    const { rerender } = render(<CivicBadge civic={{ source: "CIViC", best_evidence_level: "A", n_items: 30, n_shared_publications: 1, matched_on: null, retrieved_at: null }} />);
+    expect(screen.getByText("CIViC level A · Validated")).toBeInTheDocument();
+    rerender(<CivicBadge civic={null} />);
+    expect(screen.getByText("Not in CIViC")).toBeInTheDocument();
+  });
+});
+
+describe("evidence vs prevalence", () => {
+  it("groups points by quadrant and floors tiny frequencies for the log axis", () => {
+    const base = { ...kras, association_id: 1, biomarker_id: 1, biomarker_name: "x", biomarker_code: "CBM-1", cancer_name: "c",
+      biomarker_role: "predictive", overall_score: 80, score_status: "complete" as const };
+    const items: DiscordanceItem[] = [
+      { ...base, quadrant: "established" },
+      { ...base, association_id: 2, frequency: 0.001, quadrant: "rare_thin" },
+    ];
+    const g = quadrantPoints(items);
+    expect(g.established).toHaveLength(1);
+    expect(g.under_curated).toHaveLength(0);
+    expect(g.rare_thin[0].pct).toBe(0.5);  // 0.1% floored to the axis minimum, never dropped
+  });
+});
+
+describe("rank interval", () => {
+  it("describes the interval in text, not only graphically", () => {
+    const it_: RobustnessItem = { association_id: 1, biomarker_id: 1, biomarker_name: "PSA", cancer_name: "Prostate", biomarker_role: "diagnostic",
+      baseline_score: 86.5, baseline_rank: 4, median_rank: 8, rank_p05: 3, rank_p95: 51, rank_interval_width: 48, share_in_top_k: 0.69 };
+    render(<RankInterval item={it_} n={55} />);
+    expect(screen.getByRole("img", { name: "Baseline rank 4; 90% of weightings give rank 3 to 51" })).toBeInTheDocument();
+  });
+});

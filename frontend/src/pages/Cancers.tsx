@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { GitCompare } from "lucide-react";
 import type { Cancer, CancerDetail as Detail, CompareEntry, CompareResult, NetworkData } from "../api/types";
 import { ChartCard, HBar, VBar, histogramData } from "../components/charts";
@@ -9,6 +9,7 @@ import {
   ScoreStatusLabel, Select, Table,
 } from "../components/ui";
 import { exportUrl } from "../api/client";
+import { CivicBadge, FrequencyLabel } from "../components/genomic";
 import { humanize } from "../lib/format";
 import { useApi } from "../lib/useApi";
 
@@ -26,7 +27,11 @@ export function CancerList() {
                 className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-brand">
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="text-lg font-semibold text-navy-900">{c.name}</h2>
-                  <Badge>{c.external_identifier}</Badge>
+                  <span className="flex flex-wrap justify-end gap-1">
+                    <Badge>{c.external_identifier}</Badge>
+                    {c.mondo_id && <Badge>{c.mondo_id}</Badge>}
+                    {c.icdo_topography && <Badge title="ICD-O-3 topography">ICD-O {c.icdo_topography}</Badge>}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-slate-600">{c.description}</p>
                 <div className="mt-3 flex gap-6 text-sm">
@@ -99,6 +104,7 @@ export function CancerDetail() {
   const state = useApi<Detail>(`/cancers/${id}`);
   const net = useApi<NetworkData>("/network", { cancer_id: id });
   const [role, setRole] = useState("");
+  const navigate = useNavigate();
 
   return (
     <AsyncBlock state={state}>
@@ -111,7 +117,15 @@ export function CancerDetail() {
             <Card title="Overview">
               <KeyValue items={[
                 ["Tissue origin", c.tissue_origin], ["Category", c.cancer_category],
-                ["Identifier", c.external_identifier], ["GDC project", c.gdc_project_id],
+                ["Disease Ontology", c.external_identifier], ["Mondo", c.mondo_id],
+                ["ICD-O-3 topography", c.icdo_topography], ["GDC project", c.gdc_project_id],
+                ["TCGA cohorts (cBioPortal)", c.cohorts.length === 0 ? "None" : (
+                  <ul className="space-y-0.5">{c.cohorts.map((k) => (
+                    <li key={k.study_id}>
+                      {k.source_url ? <ExternalLink href={k.source_url}>{k.name}</ExternalLink> : k.name}
+                      <span className="tabular text-xs text-slate-500"> · {k.n_samples_mutation} sequenced, {k.n_samples_cna} CNA-profiled</span>
+                    </li>))}
+                  </ul>)],
                 ["Links", <span className="flex flex-wrap gap-3">{c.links.map((l) => <ExternalLink key={l.url} href={l.url}>{l.label}</ExternalLink>)}</span>],
               ]} />
             </Card>
@@ -127,10 +141,21 @@ export function CancerDetail() {
               </ChartCard>
             </div>
 
+            {c.top_altered_genes.length > 0 && (
+              <ChartCard title="Most frequently altered curated genes in TCGA (% of profiled tumours)" valueLabel="% altered"
+                data={c.top_altered_genes.map((g) => ({ label: `${g.gene_symbol} · ${humanize(g.alteration_type)}`, value: Number((g.frequency * 100).toFixed(1)) }))}>
+                <HBar valueLabel="% altered"
+                  data={c.top_altered_genes.map((g) => ({ label: `${g.gene_symbol} · ${humanize(g.alteration_type)}`, value: Number((g.frequency * 100).toFixed(1)), id: g.gene_id }))}
+                  onSelect={(d) => navigate(`/genes/${d.id}`)} />
+                <p className="mt-2 text-xs text-slate-500">Counts pooled over {c.cohorts.map((k) => k.study_id).join(" + ")}; only the
+                  genes curated in this database are shown, so this is not a genome-wide ranking.</p>
+              </ChartCard>
+            )}
+
             <Card title={`Associated biomarkers (${assocs.length})`} bodyClass="p-0"
               actions={<div className="w-44"><Select label="" value={role} onChange={setRole} allLabel="All roles"
                 options={c.role_distribution.map((r) => ({ value: r.role, label: humanize(r.role) }))} /></div>}>
-              <Table head={["Biomarker", "Role", "Publications", "Score", "Status", ""]} caption="Associated biomarkers">
+              <Table head={["Biomarker", "Role", "Publications", "Score", "Status", "TCGA frequency", "CIViC", ""]} caption="Associated biomarkers">
                 {assocs.map((a) => (
                   <tr key={a.association_id} className="hover:bg-slate-50">
                     <td className="px-3 py-2"><Link to={`/biomarkers/${a.biomarker.biomarker_id}`} className="font-medium text-navy-700 hover:underline">{a.biomarker.name}</Link></td>
@@ -138,6 +163,8 @@ export function CancerDetail() {
                     <td className="tabular px-3 py-2">{a.n_publications}</td>
                     <td className="px-3 py-2"><ScorePill score={a.score?.overall_score} status={a.score?.score_status} /></td>
                     <td className="px-3 py-2"><ScoreStatusLabel status={a.score?.score_status} /></td>
+                    <td className="px-3 py-2">{a.tcga ? <FrequencyLabel t={a.tcga} compact /> : <span className="text-xs text-slate-400" title="Not applicable to this biomarker type">n/a</span>}</td>
+                    <td className="px-3 py-2"><CivicBadge civic={a.civic} /></td>
                     <td className="px-3 py-2 text-right"><Link to={`/associations/${a.association_id}`} className="text-xs text-teal-brand hover:underline">Evidence</Link></td>
                   </tr>
                 ))}

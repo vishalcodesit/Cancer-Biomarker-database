@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import type { Association, BiomarkerDetail as Detail, NetworkData } from "../api/types";
 import { EvidenceList } from "../components/EvidenceList";
+import { CivicBadge, TcgaPanel } from "../components/genomic";
 import { NetworkGraph } from "../components/NetworkGraph";
 import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import {
@@ -37,7 +38,14 @@ function AssociationCard({ a }: { a: Association }) {
           )}
           <EvidenceList evidence={a.evidence ?? []} />
         </div>
-        <div className="rounded-lg bg-slate-50 p-3"><ScoreBreakdown score={a.score} /></div>
+        <div className="space-y-3">
+          <div className="rounded-lg bg-slate-50 p-3"><ScoreBreakdown score={a.score} /></div>
+          <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">External context</h3>
+            <div><div className="mb-1 text-xs font-medium text-slate-600">Frequency in tumours (TCGA)</div><TcgaPanel t={a.tcga} /></div>
+            <div><div className="mb-1 text-xs font-medium text-slate-600">Expert benchmark</div><CivicBadge civic={a.civic} /></div>
+          </div>
+        </div>
       </div>
     </Card>
   );

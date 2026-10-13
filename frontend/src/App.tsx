@@ -11,7 +11,9 @@ import { EntityBrowser, GeneDetail, PathwayDetail, ProteinDetail, VariantDetail 
 import Gaps from "./pages/Gaps";
 import ImportPage from "./pages/ImportPage";
 import Methodology from "./pages/Methodology";
+import Prevalence from "./pages/Prevalence";
 import Publications from "./pages/Publications";
+import Validation from "./pages/Validation";
 
 function NotFound() {
   return (
@@ -39,6 +41,8 @@ export default function App() {
         <Route path="variants/:id" element={<VariantDetail />} />
         <Route path="publications" element={<Publications />} />
         <Route path="gaps" element={<Gaps />} />
+        <Route path="prevalence" element={<Prevalence />} />
+        <Route path="validation" element={<Validation />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="methodology" element={<Methodology />} />
         <Route path="import" element={<ImportPage />} />

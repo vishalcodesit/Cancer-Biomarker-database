@@ -1,44 +1,44 @@
-official_symbol,full_name,organism,ncbi_gene_id,description
-BRCA1,BRCA1 DNA repair associated,Homo sapiens,672,Tumour suppressor involved in homologous-recombination DNA double-strand break repair.
-BRCA2,BRCA2 DNA repair associated,Homo sapiens,675,Tumour suppressor that mediates RAD51 loading during homologous recombination.
-PALB2,partner and localizer of BRCA2,Homo sapiens,79728,Links BRCA1 and BRCA2 in the homologous-recombination repair complex.
-CHEK2,checkpoint kinase 2,Homo sapiens,11200,Serine/threonine kinase activated by DNA damage that regulates cell-cycle checkpoints.
-ATM,ATM serine/threonine kinase,Homo sapiens,472,Apical kinase of the DNA double-strand break response.
-ERBB2,erb-b2 receptor tyrosine kinase 2,Homo sapiens,2064,Receptor tyrosine kinase of the EGFR family (HER2); amplified in a subset of carcinomas.
-ESR1,estrogen receptor 1,Homo sapiens,2099,Ligand-activated nuclear receptor mediating oestrogen signalling.
-PGR,progesterone receptor,Homo sapiens,5241,Ligand-activated nuclear receptor mediating progesterone signalling.
-MKI67,marker of proliferation Ki-67,Homo sapiens,4288,Nuclear protein expressed in proliferating cells; used as a proliferation marker.
-PIK3CA,"phosphatidylinositol-4,5-bisphosphate 3-kinase catalytic subunit alpha",Homo sapiens,5290,Catalytic subunit of class I PI3K (p110 alpha).
-TP53,tumor protein p53,Homo sapiens,7157,Transcription factor that responds to cellular stress; the most frequently mutated tumour suppressor.
-MUC1,"mucin 1, cell surface associated",Homo sapiens,4582,Transmembrane glycoprotein; its shed form is measured as CA 15-3.
-CDH1,cadherin 1,Homo sapiens,999,E-cadherin; calcium-dependent cell-cell adhesion protein of adherens junctions.
-EGFR,epidermal growth factor receptor,Homo sapiens,1956,Receptor tyrosine kinase activating MAPK and PI3K signalling.
-ALK,ALK receptor tyrosine kinase,Homo sapiens,238,Receptor tyrosine kinase; oncogenic when fused to partners such as EML4.
-EML4,EMAP like 4,Homo sapiens,27436,Microtubule-associated protein; most common 5' fusion partner of ALK in lung cancer.
-ROS1,"ROS proto-oncogene 1, receptor tyrosine kinase",Homo sapiens,6098,Receptor tyrosine kinase; oncogenic when rearranged.
-KRAS,"KRAS proto-oncogene, GTPase",Homo sapiens,3845,Small GTPase transducing signals from receptor tyrosine kinases to MAPK and PI3K pathways.
-NRAS,"NRAS proto-oncogene, GTPase",Homo sapiens,4893,Small GTPase of the RAS family.
-BRAF,"B-Raf proto-oncogene, serine/threonine kinase",Homo sapiens,673,RAF-family kinase in the MAPK cascade.
-MET,"MET proto-oncogene, receptor tyrosine kinase",Homo sapiens,4233,Hepatocyte growth factor receptor.
-RET,ret proto-oncogene,Homo sapiens,5979,Receptor tyrosine kinase; oncogenic through fusions and activating mutations.
-CD274,CD274 molecule,Homo sapiens,29126,PD-L1; immune-checkpoint ligand of PD-1.
-STK11,serine/threonine kinase 11,Homo sapiens,6794,LKB1; master kinase regulating AMPK-family kinases.
-NTRK1,neurotrophic receptor tyrosine kinase 1,Homo sapiens,4914,TRKA receptor tyrosine kinase.
-NTRK2,neurotrophic receptor tyrosine kinase 2,Homo sapiens,4915,TRKB receptor tyrosine kinase.
-NTRK3,neurotrophic receptor tyrosine kinase 3,Homo sapiens,4916,TRKC receptor tyrosine kinase.
-MLH1,mutL homolog 1,Homo sapiens,4292,DNA mismatch-repair protein.
-MSH2,mutS homolog 2,Homo sapiens,4436,DNA mismatch-repair protein that recognises mismatched bases.
-APC,APC regulator of WNT signaling pathway,Homo sapiens,324,Tumour suppressor in the beta-catenin destruction complex.
-CEACAM5,CEA cell adhesion molecule 5,Homo sapiens,1048,Carcinoembryonic antigen (CEA) glycoprotein.
-SEPTIN9,septin 9,Homo sapiens,10801,Cytoskeletal GTP-binding protein; promoter methylation measured in plasma.
-NDRG4,NDRG family member 4,Homo sapiens,65009,NDRG family member; methylation is one stool DNA test target.
-BMP3,bone morphogenetic protein 3,Homo sapiens,651,TGF-beta superfamily ligand; methylation is one stool DNA test target.
-KLK3,kallikrein related peptidase 3,Homo sapiens,354,Prostate-specific antigen (PSA) serine protease.
-TMPRSS2,transmembrane serine protease 2,Homo sapiens,7113,Androgen-regulated serine protease; 5' partner of ERG fusions.
-ERG,ETS transcription factor ERG,Homo sapiens,2078,ETS-family transcription factor.
-PCA3,prostate cancer associated 3,Homo sapiens,50652,Prostate-specific long non-coding RNA.
-AR,androgen receptor,Homo sapiens,367,Ligand-activated nuclear receptor mediating androgen signalling.
-PTEN,phosphatase and tensin homolog,Homo sapiens,5728,Lipid phosphatase that antagonises PI3K signalling.
-AMACR,alpha-methylacyl-CoA racemase,Homo sapiens,23600,Peroxisomal and mitochondrial enzyme of branched-chain fatty-acid metabolism.
-SPOP,speckle type BTB/POZ protein,Homo sapiens,8405,Substrate adaptor of a CUL3 ubiquitin ligase.
-CDK12,cyclin dependent kinase 12,Homo sapiens,51755,Transcription-associated kinase that regulates expression of DNA-repair genes.
+official_symbol,full_name,organism,ncbi_gene_id,hgnc_id,description
+BRCA1,BRCA1 DNA repair associated,Homo sapiens,672,HGNC:1100,Tumour suppressor involved in homologous-recombination DNA double-strand break repair.
+BRCA2,BRCA2 DNA repair associated,Homo sapiens,675,HGNC:1101,Tumour suppressor that mediates RAD51 loading during homologous recombination.
+PALB2,partner and localizer of BRCA2,Homo sapiens,79728,HGNC:26144,Links BRCA1 and BRCA2 in the homologous-recombination repair complex.
+CHEK2,checkpoint kinase 2,Homo sapiens,11200,HGNC:16627,Serine/threonine kinase activated by DNA damage that regulates cell-cycle checkpoints.
+ATM,ATM serine/threonine kinase,Homo sapiens,472,HGNC:795,Apical kinase of the DNA double-strand break response.
+ERBB2,erb-b2 receptor tyrosine kinase 2,Homo sapiens,2064,HGNC:3430,Receptor tyrosine kinase of the EGFR family (HER2); amplified in a subset of carcinomas.
+ESR1,estrogen receptor 1,Homo sapiens,2099,HGNC:3467,Ligand-activated nuclear receptor mediating oestrogen signalling.
+PGR,progesterone receptor,Homo sapiens,5241,HGNC:8910,Ligand-activated nuclear receptor mediating progesterone signalling.
+MKI67,marker of proliferation Ki-67,Homo sapiens,4288,HGNC:7107,Nuclear protein expressed in proliferating cells; used as a proliferation marker.
+PIK3CA,"phosphatidylinositol-4,5-bisphosphate 3-kinase catalytic subunit alpha",Homo sapiens,5290,HGNC:8975,Catalytic subunit of class I PI3K (p110 alpha).
+TP53,tumor protein p53,Homo sapiens,7157,HGNC:11998,Transcription factor that responds to cellular stress; the most frequently mutated tumour suppressor.
+MUC1,"mucin 1, cell surface associated",Homo sapiens,4582,HGNC:7508,Transmembrane glycoprotein; its shed form is measured as CA 15-3.
+CDH1,cadherin 1,Homo sapiens,999,HGNC:1748,E-cadherin; calcium-dependent cell-cell adhesion protein of adherens junctions.
+EGFR,epidermal growth factor receptor,Homo sapiens,1956,HGNC:3236,Receptor tyrosine kinase activating MAPK and PI3K signalling.
+ALK,ALK receptor tyrosine kinase,Homo sapiens,238,HGNC:427,Receptor tyrosine kinase; oncogenic when fused to partners such as EML4.
+EML4,EMAP like 4,Homo sapiens,27436,HGNC:1316,Microtubule-associated protein; most common 5' fusion partner of ALK in lung cancer.
+ROS1,"ROS proto-oncogene 1, receptor tyrosine kinase",Homo sapiens,6098,HGNC:10261,Receptor tyrosine kinase; oncogenic when rearranged.
+KRAS,"KRAS proto-oncogene, GTPase",Homo sapiens,3845,HGNC:6407,Small GTPase transducing signals from receptor tyrosine kinases to MAPK and PI3K pathways.
+NRAS,"NRAS proto-oncogene, GTPase",Homo sapiens,4893,HGNC:7989,Small GTPase of the RAS family.
+BRAF,"B-Raf proto-oncogene, serine/threonine kinase",Homo sapiens,673,HGNC:1097,RAF-family kinase in the MAPK cascade.
+MET,"MET proto-oncogene, receptor tyrosine kinase",Homo sapiens,4233,HGNC:7029,Hepatocyte growth factor receptor.
+RET,ret proto-oncogene,Homo sapiens,5979,HGNC:9967,Receptor tyrosine kinase; oncogenic through fusions and activating mutations.
+CD274,CD274 molecule,Homo sapiens,29126,HGNC:17635,PD-L1; immune-checkpoint ligand of PD-1.
+STK11,serine/threonine kinase 11,Homo sapiens,6794,HGNC:11389,LKB1; master kinase regulating AMPK-family kinases.
+NTRK1,neurotrophic receptor tyrosine kinase 1,Homo sapiens,4914,HGNC:8031,TRKA receptor tyrosine kinase.
+NTRK2,neurotrophic receptor tyrosine kinase 2,Homo sapiens,4915,HGNC:8032,TRKB receptor tyrosine kinase.
+NTRK3,neurotrophic receptor tyrosine kinase 3,Homo sapiens,4916,HGNC:8033,TRKC receptor tyrosine kinase.
+MLH1,mutL homolog 1,Homo sapiens,4292,HGNC:7127,DNA mismatch-repair protein.
+MSH2,mutS homolog 2,Homo sapiens,4436,HGNC:7325,DNA mismatch-repair protein that recognises mismatched bases.
+APC,APC regulator of WNT signaling pathway,Homo sapiens,324,HGNC:583,Tumour suppressor in the beta-catenin destruction complex.
+CEACAM5,CEA cell adhesion molecule 5,Homo sapiens,1048,HGNC:1817,Carcinoembryonic antigen (CEA) glycoprotein.
+SEPTIN9,septin 9,Homo sapiens,10801,HGNC:7323,Cytoskeletal GTP-binding protein; promoter methylation measured in plasma.
+NDRG4,NDRG family member 4,Homo sapiens,65009,HGNC:14466,NDRG family member; methylation is one stool DNA test target.
+BMP3,bone morphogenetic protein 3,Homo sapiens,651,HGNC:1070,TGF-beta superfamily ligand; methylation is one stool DNA test target.
+KLK3,kallikrein related peptidase 3,Homo sapiens,354,HGNC:6364,Prostate-specific antigen (PSA) serine protease.
+TMPRSS2,transmembrane serine protease 2,Homo sapiens,7113,HGNC:11876,Androgen-regulated serine protease; 5' partner of ERG fusions.
+ERG,ETS transcription factor ERG,Homo sapiens,2078,HGNC:3446,ETS-family transcription factor.
+PCA3,prostate cancer associated 3,Homo sapiens,50652,HGNC:8637,Prostate-specific long non-coding RNA.
+AR,androgen receptor,Homo sapiens,367,HGNC:644,Ligand-activated nuclear receptor mediating androgen signalling.
+PTEN,phosphatase and tensin homolog,Homo sapiens,5728,HGNC:9588,Lipid phosphatase that antagonises PI3K signalling.
+AMACR,alpha-methylacyl-CoA racemase,Homo sapiens,23600,HGNC:451,Peroxisomal and mitochondrial enzyme of branched-chain fatty-acid metabolism.
+SPOP,speckle type BTB/POZ protein,Homo sapiens,8405,HGNC:11254,Substrate adaptor of a CUL3 ubiquitin ligase.
+CDK12,cyclin dependent kinase 12,Homo sapiens,51755,HGNC:24224,Transcription-associated kinase that regulates expression of DNA-repair genes.

@@ -10,6 +10,14 @@ const LABEL_OVERRIDES: Record<string, string> = {
   curated_literature: "Curated literature",
   rna_transcript: "RNA transcript",
   epigenetic_methylation: "Epigenetic methylation",
+  role_evidence_mismatch: "Role-evidence mismatch",
+  somatic_mutation: "Somatic mutation",
+  somatic_mutation_upper_bound: "Somatic mutation (gene-level upper bound)",
+  deep_deletion: "Deep deletion",
+  under_curated: "Common but thinly supported",
+  niche_supported: "Rare but well supported",
+  rare_thin: "Rare and thinly supported",
+  established: "Common and well supported",
 };
 
 /** snake_case vocabulary value -> readable label. */
@@ -45,3 +53,18 @@ export const WEIGHT_KEYS: Record<string, string> = {
   evidence_type: "evidence_type",
   consistency: "consistency",
 };
+
+/** Fraction (0-1) -> percent with one decimal; frequencies below 0.1% keep two decimals so they never read as 0. */
+export function formatFrequency(f: number | null | undefined): string {
+  if (f === null || f === undefined) return "n/a";
+  const pct = f * 100;
+  if (pct > 0 && pct < 0.1) return `${pct.toFixed(2)}%`;
+  return `${pct.toFixed(1)}%`;
+}
+
+/** CIViC evidence level -> short meaning shown next to the letter. */
+export const CIVIC_LEVELS: Record<string, string> = {
+  A: "Validated", B: "Clinical", C: "Case study", D: "Preclinical", E: "Inferential",
+};
+
+export const QUADRANT_ORDER = ["established", "under_curated", "niche_supported", "rare_thin"] as const;

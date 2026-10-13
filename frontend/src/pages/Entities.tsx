@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import type { BiomarkerBrief, GeneBrief, Link as ExtLink, PathwayBrief, ProteinBrief, Variant } from "../api/types";
+import type { BiomarkerBrief, GeneBrief, Link as ExtLink, PathwayBrief, ProteinBrief, TcgaFrequency, Variant } from "../api/types";
+import { FrequencyLabel } from "../components/genomic";
+import { humanize } from "../lib/format";
 import { AsyncBlock, Badge, Card, ExternalLink, KeyValue, PageHeader, RoleBadge, Table } from "../components/ui";
 import { useApi } from "../lib/useApi";
 
@@ -118,6 +120,7 @@ function PathwayLinks({ items }: { items: PathwayBrief[] }) {
 }
 
 interface GeneDetailData extends GeneBrief {
+  tcga_prevalence: (TcgaFrequency & { cancer_id: number; cancer_name: string })[];
   organism: string; description: string | null; links: ExtLink[];
   proteins: (ProteinBrief & { links: ExtLink[] })[]; pathways: PathwayBrief[]; variants: Variant[];
   biomarkers: (BiomarkerBrief & { cancers: string[] })[];
@@ -132,8 +135,23 @@ export function GeneDetail() {
         <div className="space-y-5">
           <PageHeader title={g.official_symbol} subtitle={g.full_name} />
           <Card title="Gene record">
-            <KeyValue items={[["Organism", <em>{g.organism}</em>], ["NCBI Gene ID", g.ncbi_gene_id], ["Description", g.description], ["External links", <Links links={g.links} />]]} />
+            <KeyValue items={[["Organism", <em>{g.organism}</em>], ["NCBI Gene ID", g.ncbi_gene_id], ["HGNC ID", g.hgnc_id],
+              ["Description", g.description], ["External links", <Links links={g.links} />]]} />
           </Card>
+          {g.tcga_prevalence.length > 0 && (
+            <Card title="Alteration frequency in TCGA tumours (cBioPortal, PanCancer Atlas)" bodyClass="p-0">
+              <Table head={["Cancer", "Alteration", "Frequency", "Cohorts"]} caption="TCGA alteration frequency">
+                {g.tcga_prevalence.map((t) => (
+                  <tr key={`${t.cancer_id}-${t.alteration_type}`}>
+                    <td className="px-3 py-1.5"><Link to={`/cancers/${t.cancer_id}`} className="text-navy-700 hover:underline">{t.cancer_name}</Link></td>
+                    <td className="px-3 py-1.5">{humanize(t.alteration_type)}</td>
+                    <td className="px-3 py-1.5"><FrequencyLabel t={t} /></td>
+                    <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{t.cohorts.join(" + ")}</td>
+                  </tr>
+                ))}
+              </Table>
+            </Card>
+          )}
           <div className="grid gap-5 lg:grid-cols-2">
             <Card title="Biomarkers"><BiomarkerLinks items={g.biomarkers} /></Card>
             <Card title="Encoded proteins">

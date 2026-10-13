@@ -10,6 +10,7 @@ from app.database import Base, get_db, make_engine
 from app.main import app
 from app.services.importer import import_directory
 from app.services.scores import recompute_all
+from app.views import create_views
 
 SAMPLE_DIR = BACKEND_DIR / "data" / "sample"
 
@@ -24,6 +25,8 @@ def _engine():
         conn.execute("PRAGMA foreign_keys=ON")
 
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        create_views(conn)
     return engine
 
 

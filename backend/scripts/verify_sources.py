@@ -19,19 +19,18 @@ import argparse
 import json
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts._http import request  # noqa: E402  (certifi trust store; see scripts/_http.py)
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "sample"
 
 
 def _get(url: str, *, as_json: bool = True):
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "cancerbiomap/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = resp.read()
-    return json.loads(body) if as_json else body.decode()
+    return request(url, as_json=as_json, timeout=30)
 
 
 def verify_genes() -> int:

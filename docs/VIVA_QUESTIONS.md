@@ -25,11 +25,10 @@ The evidence differs by role. HER2 in breast cancer is prognostic (Slamon 1987) 
 `UNIQUE(biomarker_id, cancer_id, biomarker_role)`.
 
 **4. What is the novelty, precisely?**
-Not a new biological finding, and not a clinically validated score. It is an evidence-coverage
-assessment that is *decomposable* (four inspectable components), *missing-data-aware* (unknown is
-never zero; provisional and insufficient states) and *de-duplicated*, built into the relational
-database together with a gap analysis. Expert-level systems such as CIViC and OncoKB assign
-categorical evidence levels; this project complements them with a transparent coverage measure.
+Not a new biological finding, and not a clinically validated score. Four things together: (1) a role-specific,
+decomposable, missing-data-aware and provably monotone evidence score; (2) literature evidence set against how
+common the alteration is in tumours (TCGA); (3) a prevalence-weighted curation work list; (4) validation of the score
+against CIViC and for robustness to its weights. See section H for how this differs from DisGeNET's score.
 
 **5. How is your system different from CIViC or OncoKB?**
 They are large expert-curated knowledgebases with evidence levels assigned by curators. CancerBioMap
@@ -83,8 +82,9 @@ tables in the models.
 
 **13. Why does SQLite work if the target is PostgreSQL?**
 SQLAlchemy abstracts dialect differences, and the analytics SQL uses only portable constructs (JOIN,
-GROUP BY/HAVING, COALESCE, CASE, INTERSECT, LIMIT). For example, `ROUND(AVG(x), 1)` is avoided because
-PostgreSQL has no `ROUND(double precision, int)`; rounding is done in Python.
+GROUP BY/HAVING, COALESCE, CASE, INTERSECT, LIMIT, views). `ROUND(AVG(x), 1)` is avoided because PostgreSQL has no
+`ROUND(double precision, int)`; rounding is done in Python. In version 1.1 this was verified, not assumed: the
+migrations were applied to PostgreSQL 16 and every read endpoint was compared with SQLite (see H12).
 
 ## C. SQL
 
@@ -111,8 +111,9 @@ and mirrored duplicates.
 ## D. Evidence-support score
 
 **19. State the formula and its components.**
-`Score = 0.35P + 0.25D + 0.25T + 0.15C`. P = `100·log2(1+n)/log2(6)` (capped), D = `100·(1−0.5ⁿ)`,
-T = `0.7·max + 0.3·mean` of the evidence-type rubric, C = `100·(supports + 0.5·mixed)/annotated`.
+`Score = 0.35P + 0.25D + 0.25T + 0.15C`. P = `100·log2(1+n)/log2(6)` (capped), D = `100·(1−0.5ⁿ)` over
+distinct supporting sources, T = `100·(1 − (1 − b1)·Π(1 − 0.25·b_i))` over distinct study designs (b = rubric/100,
+b1 the strongest), C = `100·(supports + 0.5·mixed)/annotated`.
 
 **20. Why logarithmic publication support?**
 Diminishing returns: the second study adds more confidence than the twentieth, and a cap stops one
@@ -144,8 +145,9 @@ Yes. `compute_score` is a pure function with no clock, randomness or I/O. Scores
 
 **26. Walk through a manual calculation.**
 Three publications (RCT, cohort, genomic profiling), two sources, two "supports":
-P = 77.37, D = 75, T = 0.7·95 + 0.3·80 = 90.5, C = 100 → 0.35·77.37 + 0.25·75 + 0.25·90.5 + 0.15·100
-= **83.45** (`tests/test_scoring.py::test_manual_complete_case`).
+P = 77.37, D = 75, T = 100·(1 − 0.05·0.80·0.8375) = 96.65, C = 100 →
+0.35·77.37 + 0.25·75 + 0.25·96.65 + 0.15·100 = **84.99** (`tests/test_scoring.py::test_manual_complete_case`).
+Version 1.0.0 gave 83.45 for the same input (`test_legacy_module_reproduces_original_results`).
 
 **27. Can a high score mean a biomarker is clinically valid?**
 No. It measures how much, how varied and how consistent the *recorded* evidence is. The UI and API
@@ -160,7 +162,7 @@ PLCO (no mortality reduction, `mixed`) and ERSPC (reduced mortality, `supports`)
 
 **29. How did you ensure no citations were fabricated?**
 Every PMID was checked against PubMed `esummary` (`scripts/fetch_pubmed.py`). This found 11
-discrepancies in the initial list, which were corrected before import. Metadata (authors, journal,
+discrepancies in the initial list, which were corrected before import. All 86 PMIDs in version 1.1 match PubMed. Metadata (authors, journal,
 year, DOI) comes from PubMed, not from memory.
 
 **30. What else was verified?**
@@ -199,9 +201,9 @@ gene_protein, biomarker_pathway, evidence → publication, variant_association).
 with a deterministic force-directed algorithm, so the same data always gives the same picture.
 
 **37. What did you test?**
-51 backend tests (schema constraints, cascades, migration, import validation and idempotency, scoring
-including manual cases, all major API endpoints, errors and CSV export) and 9 frontend tests (unknown
-rendering, provisional warning, layout determinism).
+80 backend tests (schema constraints, cascades, migrations including views, import validation and idempotency,
+scoring including manual and randomised property tests, all major endpoints, robustness, validation, write guard)
+and 15 frontend tests.
 
 ## G. Critical reflection
 
@@ -210,9 +212,103 @@ Small curated sample, uncalibrated weights, single-curator annotations, selectio
 landmark positive studies, and source independence approximated by name.
 
 **39. How would you validate the score?**
-Compare score rankings against expert evidence levels (for example, CIViC or OncoKB tiers) with rank
-correlation, run a weight sensitivity analysis, and measure inter-curator agreement on annotations.
+Done in version 1.1 (Score Validation page): Spearman rho 0.47 with CIViC levels (p = 0.006, 95% CI 0.17 to 0.70,
+n = 34), and a weight-robustness analysis (mean rank correlation 0.91 over 1,000 random weightings). Still to do:
+inter-curator agreement on annotations.
 
 **40. How would you scale it?**
 Run on PostgreSQL with full-text indexes, add batch ingestion from CIViC/PubMed with provenance,
 precompute scores asynchronously on evidence changes, and add authentication for curators.
+
+## H. Version 1.1 upgrades
+
+**H1. How is your score different from DisGeNET's gene-disease association (GDA) score?**
+DisGeNET's score is the closest prior art: it combines the number and reliability of sources and the number of
+publications. Ours differs in four ways: it is per role (predictive evidence is scored separately from prognostic);
+it distinguishes unknown from absent and reports provisional or insufficient instead of a low number; it weighs study
+design and curated consistency; and it is proven monotone. We do not claim the idea of an evidence score is new.
+
+**H2. What was wrong with version 1.0.0 of the score?**
+Two things, both measured. KEGG disease-map rows, which the project itself says do not support the role, counted as
+a source and raised 34 of 58 scores by 3.1 to 7.4 points. And T used a mean, so adding a weaker corroborating study
+could lower the score (five RCTs 86.25; adding a supporting review gave 84.19). Both are fixed in 1.1.0 and tested.
+
+**H3. Why does monotonicity matter?**
+A support score that falls when more supporting evidence is added rewards curators for leaving evidence out. The new
+T is a discounted noisy-OR: each extra design multiplies the "residual doubt" by a factor at most 1, so T can only
+stay or rise. Randomised tests check it on thousands of cases.
+
+**H4. Version 1.0.0 agreed better with CIViC (rho 0.54 vs 0.47). Why keep 1.1.0?**
+The drop comes entirely from the KEGG correction (shown by testing each change separately). KEGG maps list the
+canonical cancer genes, which experts also rate highly, so KEGG membership correlates with CIViC level (rho 0.22)
+without being evidence for a specific role. The difference is not significant (paired bootstrap 95% CI -0.20 to
+0.06). Keeping a definitional error because it happens to agree with the benchmark would be tuning to the test.
+
+**H5. Is the CIViC validation circular?**
+No. CIViC never enters the score; it is stored in a separate table and used only for the concordance. 21 of 58
+associations share at least one PMID with CIViC, which is expected (both cite the landmark trials) and does not make
+the levels an input. Using CIViC evidence as a scoring source would make the validation circular, which is why it
+is listed as future work only with a held-out benchmark.
+
+**H6. What does rho 0.47 mean in practice?**
+A moderate positive rank agreement: associations experts rate higher tend to score higher (means A 72.5 > B 66.9 >
+C 61.7). It is significant (permutation p = 0.006) but the interval is wide (0.17 to 0.70) because n = 34. We do not
+expect a perfect match: CIViC grades the single best item, our score grades breadth of recorded evidence.
+
+**H7. Why store counts rather than percentages for TCGA?**
+Percentages cannot be pooled correctly: NSCLC combines LUAD (566 sequenced tumours) and LUSC (484). Averaging the two
+percentages would weight a small cohort as much as a large one. Summing counts gives the right pooled frequency, and
+storing derived values would also break 3NF. The view `v_tcga_frequency` derives the percentage.
+
+**H8. What is the Wilson interval and why not "p plus or minus 1.96 standard errors"?**
+The simple interval breaks down for small counts and for zero (it gives a zero-width interval at 0/500). The Wilson
+score interval stays inside 0 to 1 and gives a sensible upper bound for a measured zero.
+
+**H9. Why do some biomarkers have no TCGA frequency?**
+On purpose. A gene-level frequency would mislead for protein or RNA expression (ER, PD-L1), germline carrier status
+(BRCA1 germline, Lynch genes), fusions (not in the mutation table), signatures, and acquired-resistance alterations
+(T790M, ESR1 LBD, AR-V7), which are rare in the untreated primary tumours TCGA profiled. For variant-specific
+biomarkers (KRAS G12C) the gene-level number is shown as an upper bound.
+
+**H10. Explain the robustness analysis.**
+The weights are proposed, so instead of defending exact numbers we measure how much the ranking depends on them.
+1,000 weight vectors are drawn uniformly from all possible weightings (Dirichlet(1,1,1,1)); each time all fully
+scored associations are re-ranked. Mean Spearman with the baseline ranking is 0.91 and 78% of the top 10 stay in the
+top 10. PSA is the least stable (rank 4, range 3 to 51) because it has four publications but mixed evidence, so it
+depends heavily on the consistency weight.
+
+**H11. What did the ablation show?**
+Dropping source diversity (rho 0.98) or consistency (0.97) barely changes the ranking: 93 of 101 supporting rows are
+from PubMed and nearly all annotations are "supports", so those components carry little information in this data.
+The fix is curation (independent sources, deliberate negative evidence), not re-weighting.
+
+**H12. What did running on PostgreSQL find?**
+Comparing all 190 read requests found 8 differences: collation (SQLite sorts by bytes, PostgreSQL linguistically),
+tied rows returned in different orders, a GROUP BY without ORDER BY, and a float on a rounding boundary. All fixed
+with case-insensitive ordering, a unique tie-breaker on every ORDER BY, and rounding snapped to 9 decimals. Now
+190 of 190 are identical.
+
+**H13. What is the role-evidence mismatch flag, and is it a standard?**
+It asks whether any recorded study design is of a kind the claimed role needs (predictive: trial, meta-analysis or
+guideline; prognostic, risk, monitoring: patient outcome data; diagnostic also accepts tumour profiling). It is a
+curation heuristic adapted from evidence-hierarchy logic (FDA-NIH BEST roles, AMP/ASCO/CAP levels), not a standard.
+
+**H14. Give an example of the system improving its own data.**
+The mismatch flag showed EGFR T790M and ESR1 mutations claimed as predictive with only laboratory studies. We curated
+the pivotal trials (AURA3, PMID 27959700; EMERALD, PMID 35584336), verified them through PubMed, and imported them.
+The flags cleared, scores rose (68.96 to 78.50; 71.08 to 78.68), and CIViC agreement rose from 0.41 to 0.47.
+
+**H15. How is the curation priority calculated?**
+Gap severity (sum of flag points) times (1 + 4 x TCGA frequency, capped at 50%). The same gap counts up to three
+times more for an alteration present in half of tumours. Top of the list: PTEN loss in prostate (17% of tumours, a
+prognostic claim supported only by laboratory and profiling studies) and CDK12 in prostate.
+
+**H16. What does the coverage finding show?**
+CIViC covers 17 of 20 somatic-mutation associations but none of the 4 serum-protein, 2 methylation or 3
+genomic-signature associations. That is quantitative support for the project's premise that genomic knowledge bases
+under-represent non-DNA biomarkers, which is the gap this database fills.
+
+**H17. Why were the write endpoints changed?**
+Anyone who could reach the API could import data or recompute scores. An optional ADMIN_TOKEN now protects real
+imports and recompute (constant-time comparison); dry-run validation stays open; with no token set, a local demo
+behaves as before. CORS headers were also restricted.

@@ -1,5 +1,5 @@
-code,name,tissue_origin,cancer_category,external_identifier,gdc_project_id,description
-breast,Breast cancer,Breast,Carcinoma,DOID:1612,TCGA-BRCA,"Malignant neoplasm arising from breast epithelium; molecular subtypes are defined largely by hormone-receptor and HER2 status."
-nsclc,Non-small cell lung cancer,Lung,Carcinoma,DOID:3908,TCGA-LUAD,"Non-small cell lung carcinoma, including adenocarcinoma and squamous cell carcinoma; many targeted therapies are selected by driver alterations."
-colorectal,Colorectal cancer,Colon and rectum,Carcinoma,DOID:9256,TCGA-COAD,"Adenocarcinoma of the colon or rectum; RAS/BRAF status and mismatch-repair status guide therapy selection."
-prostate,Prostate cancer,Prostate,Carcinoma,DOID:10283,TCGA-PRAD,"Adenocarcinoma of the prostate gland; androgen-receptor signalling and DNA-repair alterations are key molecular features."
+code,name,tissue_origin,cancer_category,external_identifier,mondo_id,icdo_topography,gdc_project_id,description
+breast,Breast cancer,Breast,Carcinoma,DOID:1612,MONDO:0007254,C50,TCGA-BRCA,Malignant neoplasm arising from breast epithelium; molecular subtypes are defined largely by hormone-receptor and HER2 status.
+nsclc,Non-small cell lung cancer,Lung,Carcinoma,DOID:3908,MONDO:0005233,C34,TCGA-LUAD,"Non-small cell lung carcinoma, including adenocarcinoma and squamous cell carcinoma; many targeted therapies are selected by driver alterations."
+colorectal,Colorectal cancer,Colon and rectum,Carcinoma,DOID:9256,MONDO:0005575,C18-C20,TCGA-COAD,Adenocarcinoma of the colon or rectum; RAS/BRAF status and mismatch-repair status guide therapy selection.
+prostate,Prostate cancer,Prostate,Carcinoma,DOID:10283,MONDO:0008315,C61,TCGA-PRAD,Adenocarcinoma of the prostate gland; androgen-receptor signalling and DNA-repair alterations are key molecular features.

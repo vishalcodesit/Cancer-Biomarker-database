@@ -37,8 +37,9 @@ export async function apiGet<T>(path: string, params: Record<string, QueryValue>
   return handle<T>(await fetch(`/api${path}${buildQuery(params)}`, { signal }));
 }
 
-export async function apiPost<T>(path: string, body?: FormData, params: Record<string, QueryValue> = {}) {
-  return handle<T>(await fetch(`/api${path}${buildQuery(params)}`, { method: "POST", body }));
+export async function apiPost<T>(path: string, body?: FormData, params: Record<string, QueryValue> = {},
+                                 headers: Record<string, string> = {}) {
+  return handle<T>(await fetch(`/api${path}${buildQuery(params)}`, { method: "POST", body, headers }));
 }
 
 /** URL for a CSV export; the browser downloads it directly. */

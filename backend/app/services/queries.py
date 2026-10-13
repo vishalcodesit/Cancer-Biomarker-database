@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import models as m
 from app.scoring import SCORING_VERSION
+from app.services import prevalence
 from app.services.scores import current_score, score_to_dict
 
 BC = m.BiomarkerCancer
@@ -24,7 +25,10 @@ def gene_links(g: m.Gene) -> list[dict]:
     links = []
     if g.ncbi_gene_id:
         links.append({"label": "NCBI Gene", "url": f"https://www.ncbi.nlm.nih.gov/gene/{g.ncbi_gene_id}"})
-    links.append({"label": "HGNC search", "url": f"https://www.genenames.org/tools/search/#!/?query={g.official_symbol}"})
+    if g.hgnc_id:
+        links.append({"label": g.hgnc_id, "url": f"https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/{g.hgnc_id}"})
+    else:
+        links.append({"label": "HGNC search", "url": f"https://www.genenames.org/tools/search/#!/?query={g.official_symbol}"})
     return links
 
 
@@ -36,6 +40,8 @@ def cancer_links(c: m.Cancer) -> list[dict]:
     links = []
     if c.external_identifier and c.external_identifier.startswith("DOID:"):
         links.append({"label": "Disease Ontology", "url": f"https://disease-ontology.org/?id={c.external_identifier}"})
+    if c.mondo_id:
+        links.append({"label": c.mondo_id, "url": f"https://monarchinitiative.org/{c.mondo_id}"})
     if c.gdc_project_id:
         links.append({"label": "NCI GDC project", "url": f"https://portal.gdc.cancer.gov/projects/{c.gdc_project_id}"})
     return links
@@ -48,7 +54,7 @@ def variant_links(v: m.Variant) -> list[dict]:
 # --------------------------------------------------------------------------- serializers
 def gene_brief(g: m.Gene) -> dict:
     return {"gene_id": g.gene_id, "official_symbol": g.official_symbol, "full_name": g.full_name,
-            "ncbi_gene_id": g.ncbi_gene_id}
+            "ncbi_gene_id": g.ncbi_gene_id, "hgnc_id": g.hgnc_id}
 
 
 def protein_brief(p: m.Protein) -> dict:
@@ -66,7 +72,15 @@ def cancer_brief(c: m.Cancer) -> dict:
 
 def biomarker_brief(b: m.Biomarker) -> dict:
     return {"biomarker_id": b.biomarker_id, "biomarker_code": b.biomarker_code, "name": b.name,
-            "biomarker_type": b.biomarker_type}
+            "biomarker_type": b.biomarker_type, "prevalence_basis": b.prevalence_basis}
+
+
+def benchmark_dict(a: m.BiomarkerCancer) -> dict | None:
+    b = next((x for x in a.benchmarks if x.benchmark_source == "CIViC"), None)
+    if b is None:
+        return None
+    return {"source": b.benchmark_source, "best_evidence_level": b.best_evidence_level, "n_items": b.n_items,
+            "n_shared_publications": b.n_shared_publications, "matched_on": b.matched_on, "retrieved_at": b.retrieved_at}
 
 
 def publication_dict(p: m.Publication) -> dict:
@@ -92,21 +106,24 @@ def evidence_dict(e: m.Evidence) -> dict:
             "publication": publication_dict(e.publication) if e.publication else None}
 
 
-def association_dict(a: m.BiomarkerCancer, with_evidence: bool = True) -> dict:
+def association_dict(a: m.BiomarkerCancer, with_evidence: bool = True, counts: dict | None = None) -> dict:
     d = {"association_id": a.association_id, "biomarker": biomarker_brief(a.biomarker),
          "cancer": cancer_brief(a.cancer), "biomarker_role": a.biomarker_role,
          "association_description": a.association_description, "source_status": a.source_status,
          "score": score_to_dict(current_score(a)),
          "variants": [{"variant_id": v.variant_id, "variant_identifier": v.variant_identifier} for v in a.variants],
          "n_evidence": len(a.evidence),
-         "n_publications": len({e.publication_id for e in a.evidence if e.publication_id})}
+         "n_publications": len({e.publication_id for e in a.evidence if e.publication_id}),
+         "civic": benchmark_dict(a),
+         "tcga": prevalence.association_prevalence(a, counts) if counts is not None else None}
     if with_evidence:
         d["evidence"] = [evidence_dict(e) for e in a.evidence]
     return d
 
 
 ASSOC_LOAD = (
-    selectinload(BC.biomarker),
+    selectinload(BC.biomarker).selectinload(m.Biomarker.genes),
+    selectinload(BC.benchmarks),
     selectinload(BC.cancer),
     selectinload(BC.scores),
     selectinload(BC.variants),
@@ -209,6 +226,7 @@ def biomarker_detail(db: Session, biomarker_id: int) -> dict | None:
     variant_ids = {v.variant_id for a in b.associations for v in a.variants}
     variants = [variant_dict(v) for g in b.genes for v in g.variants if v.variant_id in variant_ids]
     sources = Counter(e.source_name for a in b.associations for e in a.evidence)
+    counts = prevalence.load_counts(db)
     return {
         **biomarker_brief(b),
         "description": b.description,
@@ -219,7 +237,7 @@ def biomarker_detail(db: Session, biomarker_id: int) -> dict | None:
                    "proteins": [{**protein_brief(p), "links": protein_links(p)} for p in g.proteins]}
                   for g in b.genes],
         "pathways": [{**pathway_brief(p), "annotation_source": path_src.get(p.pathway_id)} for p in b.pathways],
-        "associations": sorted((association_dict(a) for a in b.associations),
+        "associations": sorted((association_dict(a, counts=counts) for a in b.associations),
                                key=lambda d: (d["cancer"]["name"], d["biomarker_role"])),
         "variants": variants,
         "publications": sorted(pubs.values(), key=lambda p: -(p["publication_year"] or 0)),
@@ -234,8 +252,9 @@ def list_cancers(db: Session) -> list[dict]:
         .outerjoin(BC, BC.cancer_id == m.Cancer.cancer_id).group_by(m.Cancer.cancer_id).order_by(m.Cancer.name)
     ).all()
     return [{**cancer_brief(c), "tissue_origin": c.tissue_origin, "cancer_category": c.cancer_category,
-             "external_identifier": c.external_identifier, "gdc_project_id": c.gdc_project_id,
-             "description": c.description, "n_biomarkers": nb, "n_associations": na, "links": cancer_links(c)}
+             "external_identifier": c.external_identifier, "mondo_id": c.mondo_id, "icdo_topography": c.icdo_topography,
+             "gdc_project_id": c.gdc_project_id, "description": c.description, "n_biomarkers": nb,
+             "n_associations": na, "links": cancer_links(c)}
             for c, nb, na in rows]
 
 
@@ -277,12 +296,15 @@ def cancer_detail(db: Session, cancer_id: int) -> dict | None:
             variants.setdefault(v.variant_id, {"variant_id": v.variant_id, "variant_identifier": v.variant_identifier,
                                                "biomarker": a.biomarker.name})
     role_counts = Counter(a.biomarker_role for a in assocs)
+    counts = prevalence.load_counts(db)
     return {
         **cancer_brief(c),
         "tissue_origin": c.tissue_origin, "cancer_category": c.cancer_category,
-        "external_identifier": c.external_identifier, "gdc_project_id": c.gdc_project_id,
-        "description": c.description, "links": cancer_links(c),
-        "associations": sorted((association_dict(a, with_evidence=False) for a in assocs),
+        "external_identifier": c.external_identifier, "mondo_id": c.mondo_id, "icdo_topography": c.icdo_topography,
+        "gdc_project_id": c.gdc_project_id, "description": c.description, "links": cancer_links(c),
+        "cohorts": [x for x in prevalence.cohorts(db) if x["cancer_id"] == cancer_id],
+        "top_altered_genes": prevalence.cancer_top_altered(db, cancer_id),
+        "associations": sorted((association_dict(a, with_evidence=False, counts=counts) for a in assocs),
                                key=lambda d: (-(d["score"]["overall_score"] or -1) if d["score"] else 1,
                                               d["biomarker"]["name"])),
         "role_distribution": [{"role": k, "count": v} for k, v in sorted(role_counts.items())],
@@ -324,8 +346,8 @@ def list_genes(db: Session, q: str | None) -> list[dict]:
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(m.Gene.official_symbol.ilike(like), m.Gene.full_name.ilike(like)))
-    return [{**gene_brief(g), "n_biomarkers": len(g.biomarkers), "n_proteins": len(g.proteins)}
-            for g in db.scalars(stmt).all()]
+    genes = sorted(db.scalars(stmt).all(), key=lambda g: g.official_symbol)
+    return [{**gene_brief(g), "n_biomarkers": len(g.biomarkers), "n_proteins": len(g.proteins)} for g in genes]
 
 
 def gene_detail(db: Session, gene_id: int) -> dict | None:
@@ -335,6 +357,7 @@ def gene_detail(db: Session, gene_id: int) -> dict | None:
     if g is None:
         return None
     return {**gene_brief(g), "organism": g.organism, "description": g.description, "links": gene_links(g),
+            "tcga_prevalence": prevalence.gene_prevalence(db, gene_id),
             "proteins": [{**protein_brief(p), "links": protein_links(p)} for p in g.proteins],
             "pathways": [pathway_brief(p) for p in sorted(g.pathways, key=lambda p: p.pathway_name)],
             "variants": [variant_dict(v) for v in g.variants],
@@ -347,7 +370,8 @@ def list_proteins(db: Session, q: str | None) -> list[dict]:
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(m.Protein.name.ilike(like), m.Protein.accession.ilike(like)))
-    return [{**protein_brief(p), "genes": [g.official_symbol for g in p.genes]} for p in db.scalars(stmt).all()]
+    proteins = sorted(db.scalars(stmt).all(), key=lambda p: (p.name.casefold(), p.accession))
+    return [{**protein_brief(p), "genes": [g.official_symbol for g in p.genes]} for p in proteins]
 
 
 def protein_detail(db: Session, protein_id: int) -> dict | None:
@@ -368,8 +392,9 @@ def list_pathways(db: Session, q: str | None) -> list[dict]:
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(m.Pathway.pathway_name.ilike(like), m.Pathway.external_identifier.ilike(like)))
+    pathways = sorted(db.scalars(stmt).all(), key=lambda p: (p.pathway_name.casefold(), p.pathway_id))
     return [{**pathway_brief(p), "description": p.description, "n_biomarkers": len(p.biomarkers),
-             "n_genes": len(p.genes)} for p in db.scalars(stmt).all()]
+             "n_genes": len(p.genes)} for p in pathways]
 
 
 def pathway_detail(db: Session, pathway_id: int) -> dict | None:
@@ -435,12 +460,13 @@ def list_publications(db: Session, *, q: str | None, biomarker_id: int | None, c
     if year_to is not None:
         stmt = stmt.where(m.Publication.publication_year <= year_to)
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    stmt = stmt.order_by(m.Publication.publication_year.desc().nulls_last(), m.Publication.title)
+    stmt = stmt.order_by(m.Publication.publication_year.desc().nulls_last(), func.lower(m.Publication.title),
+                         m.Publication.publication_id)
     if limit is not None:
         stmt = stmt.offset(offset or 0).limit(limit)
     pubs = db.scalars(stmt).all()
     ids = [p.publication_id for p in pubs]
-    evs = db.scalars(select(EV).where(EV.publication_id.in_(ids)).options(
+    evs = db.scalars(select(EV).where(EV.publication_id.in_(ids)).order_by(EV.evidence_id).options(
         selectinload(EV.association).selectinload(BC.biomarker),
         selectinload(EV.association).selectinload(BC.cancer))).all()
     ctx: dict[int, list[m.Evidence]] = defaultdict(list)
@@ -475,7 +501,17 @@ def list_associations(db: Session, *, cancer_id: int | None, biomarker_id: int |
     if score_status:
         stmt = stmt.where(BC.association_id.in_(select(ES.association_id).where(
             ES.score_status == score_status, ES.scoring_version == SCORING_VERSION)))
-    return [association_dict(a, with_evidence=False) for a in db.scalars(stmt).all()]
+    counts = prevalence.load_counts(db)
+    return [association_dict(a, with_evidence=False, counts=counts) for a in db.scalars(stmt).all()]
+
+
+def count_associations(db: Session, cancer_id: int | None, role: str | None) -> int:
+    stmt = select(func.count()).select_from(BC)
+    if cancer_id is not None:
+        stmt = stmt.where(BC.cancer_id == cancer_id)
+    if role:
+        stmt = stmt.where(BC.biomarker_role == role)
+    return db.scalar(stmt) or 0
 
 
 def association_detail(db: Session, association_id: int) -> m.BiomarkerCancer | None:
@@ -512,26 +548,29 @@ def dashboard_stats(db: Session, cancer_id: int | None, role: str | None, eviden
         "associations": count(select(func.count()).where(in_scope)),
         "evidence_records": count(select(func.count()).select_from(EV).where(ev_scope)),
     }
+    # Every ORDER BY ends with a unique, collation-independent key so SQLite and PostgreSQL return ties in the
+    # same order (verified by comparing all endpoints on both databases).
     by_role = db.execute(select(BC.biomarker_role, func.count()).where(in_scope).group_by(BC.biomarker_role)
-                         .order_by(func.count().desc())).all()
+                         .order_by(func.count().desc(), BC.biomarker_role)).all()
     by_cancer = db.execute(select(m.Cancer.cancer_id, m.Cancer.name, func.count(BC.association_id))
                            .join(BC, BC.cancer_id == m.Cancer.cancer_id).where(in_scope)
                            .group_by(m.Cancer.cancer_id, m.Cancer.name).order_by(m.Cancer.name)).all()
     etype = func.coalesce(EV.evidence_type, "unspecified")
     by_etype = db.execute(select(etype, func.count()).where(ev_scope).group_by(etype)
-                          .order_by(func.count().desc())).all()
+                          .order_by(func.count().desc(), etype)).all()
     by_type = db.execute(select(m.Biomarker.biomarker_type, func.count(distinct(m.Biomarker.biomarker_id)))
                          .join(BC, BC.biomarker_id == m.Biomarker.biomarker_id).where(in_scope)
-                         .group_by(m.Biomarker.biomarker_type).order_by(func.count(distinct(m.Biomarker.biomarker_id)).desc())).all()
+                         .group_by(m.Biomarker.biomarker_type)
+                         .order_by(func.count(distinct(m.Biomarker.biomarker_id)).desc(), m.Biomarker.biomarker_type)).all()
     top = db.execute(select(m.Biomarker.biomarker_id, m.Biomarker.name, func.count(distinct(BC.cancer_id)),
                             func.count(distinct(EV.publication_id)))
                      .join(BC, BC.biomarker_id == m.Biomarker.biomarker_id)
                      .outerjoin(EV, EV.association_id == BC.association_id).where(in_scope)
                      .group_by(m.Biomarker.biomarker_id, m.Biomarker.name)
-                     .order_by(func.count(distinct(EV.publication_id)).desc(), m.Biomarker.name).limit(10)).all()
+                     .order_by(func.count(distinct(EV.publication_id)).desc(), m.Biomarker.biomarker_code).limit(10)).all()
     status = db.execute(select(ES.score_status, func.count()).where(
         ES.scoring_version == SCORING_VERSION, ES.association_id.in_(select(assoc_ids.c.association_id)))
-                        .group_by(ES.score_status)).all()
+                        .group_by(ES.score_status).order_by(ES.score_status)).all()
     scores = db.scalars(select(ES).where(ES.scoring_version == SCORING_VERSION,
                                          ES.association_id.in_(select(assoc_ids.c.association_id)))).all()
     return {

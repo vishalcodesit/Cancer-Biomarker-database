@@ -42,6 +42,18 @@ CONSISTENCY_VALUES = ("supports", "mixed", "conflicting")
 
 PATHWAY_DATABASES = ("KEGG", "Reactome", "WikiPathways", "Other")
 
+# Gene-level alteration classes counted in TCGA cohorts (cBioPortal Mutated Genes / CNA Genes tables).
+ALTERATION_TYPES = ("somatic_mutation", "amplification", "deep_deletion")
+
+# Which TCGA alteration frequency describes a biomarker. NULL = not meaningful (protein/RNA expression,
+# germline carrier status, fusions, signatures, or acquired-resistance alterations that are rare in the
+# untreated primary tumours profiled by TCGA). "_upper_bound" = the biomarker is a specific variant or hotspot,
+# so the gene-level frequency is an upper bound.
+PREVALENCE_BASES = ("somatic_mutation", "somatic_mutation_upper_bound", "amplification", "deep_deletion")
+
+# CIViC evidence levels: A validated, B clinical, C case study, D preclinical, E inferential.
+CIVIC_EVIDENCE_LEVELS = ("A", "B", "C", "D", "E")
+
 
 def sql_in(values: tuple[str, ...]) -> str:
     """Render a tuple as a SQL IN-list for CHECK constraints."""

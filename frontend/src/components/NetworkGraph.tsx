@@ -125,7 +125,11 @@ export function NetworkGraph({ data, height = 460 }: { data: NetworkData; height
           const p = pos[n.id];
           const st = TYPE_STYLE[n.type];
           const dim = neighbours && !neighbours.has(n.id);
-          const label = n.label.length > 32 ? `${n.label.slice(0, 31)}…` : n.label;
+          // Pathway nodes drop the "(hsa…)" identifier and all non-focus labels are shortened to limit collisions;
+          // the full label stays in the tooltip and the accessible name.
+          const base = n.type === "pathway" ? n.label.replace(/\s*\([^)]*\)$/, "") : n.label;
+          const max = i === 0 ? 32 : 20;
+          const label = base.length > max ? `${base.slice(0, max - 1)}…` : base;
           // Publication nodes cluster tightly; their labels appear on hover/focus to avoid collisions.
           const showLabel = n.type !== "publication" || hover === n.id;
           return (

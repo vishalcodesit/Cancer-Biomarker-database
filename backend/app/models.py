@@ -21,11 +21,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.vocab import (
+    ALTERATION_TYPES,
     BIOMARKER_ROLES,
     BIOMARKER_TYPES,
+    CIVIC_EVIDENCE_LEVELS,
     CONSISTENCY_VALUES,
     EVIDENCE_TYPES,
     PATHWAY_DATABASES,
+    PREVALENCE_BASES,
     SOURCE_STATUSES,
     sql_in,
 )
@@ -40,6 +43,9 @@ class Biomarker(Base):
     __tablename__ = "biomarker"
     __table_args__ = (
         CheckConstraint(f"biomarker_type IN {sql_in(BIOMARKER_TYPES)}", name="ck_biomarker_type"),
+        CheckConstraint(
+            f"prevalence_basis IS NULL OR prevalence_basis IN {sql_in(PREVALENCE_BASES)}", name="ck_prevalence_basis"
+        ),
     )
 
     biomarker_id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -49,6 +55,8 @@ class Biomarker(Base):
     description: Mapped[str | None] = mapped_column(Text)
     biological_function: Mapped[str | None] = mapped_column(Text)
     external_identifier: Mapped[str | None] = mapped_column(String(100))
+    # Which TCGA gene-level alteration frequency describes this biomarker (NULL = not meaningful; see vocab.py).
+    prevalence_basis: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     genes: Mapped[list["Gene"]] = relationship(secondary="biomarker_gene", back_populates="biomarkers")
@@ -60,18 +68,21 @@ class Biomarker(Base):
 
 class Gene(Base):
     __tablename__ = "gene"
+    __table_args__ = (UniqueConstraint("hgnc_id", name="uq_gene_hgnc_id"),)
 
     gene_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     official_symbol: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255))
     organism: Mapped[str] = mapped_column(String(100), nullable=False, default="Homo sapiens")
     ncbi_gene_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    hgnc_id: Mapped[str | None] = mapped_column(String(20))  # e.g. HGNC:1100 (verified via HGNC REST)
     description: Mapped[str | None] = mapped_column(Text)
 
     biomarkers: Mapped[list[Biomarker]] = relationship(secondary="biomarker_gene", back_populates="genes")
     proteins: Mapped[list["Protein"]] = relationship(secondary="gene_protein", back_populates="genes")
     pathways: Mapped[list["Pathway"]] = relationship(secondary="gene_pathway", back_populates="genes")
     variants: Mapped[list["Variant"]] = relationship(back_populates="gene")
+    prevalence: Mapped[list["GenomicPrevalence"]] = relationship(back_populates="gene", cascade="all, delete-orphan")
 
 
 class Protein(Base):
@@ -94,11 +105,14 @@ class Cancer(Base):
     name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     tissue_origin: Mapped[str | None] = mapped_column(String(100))
     cancer_category: Mapped[str | None] = mapped_column(String(100))
-    external_identifier: Mapped[str | None] = mapped_column(String(50))
+    external_identifier: Mapped[str | None] = mapped_column(String(50))  # Disease Ontology (DOID)
+    mondo_id: Mapped[str | None] = mapped_column(String(20))  # Mondo Disease Ontology (verified via EBI OLS)
+    icdo_topography: Mapped[str | None] = mapped_column(String(40))  # ICD-O-3 topography code(s), e.g. C50
     gdc_project_id: Mapped[str | None] = mapped_column(String(30))
     description: Mapped[str | None] = mapped_column(Text)
 
     associations: Mapped[list["BiomarkerCancer"]] = relationship(back_populates="cancer")
+    cohorts: Mapped[list["Cohort"]] = relationship(back_populates="cancer")
 
 
 class Variant(Base):
@@ -195,6 +209,9 @@ class BiomarkerCancer(Base):
     evidence: Mapped[list["Evidence"]] = relationship(back_populates="association", cascade="all, delete-orphan")
     variants: Mapped[list[Variant]] = relationship(secondary="variant_association", back_populates="associations")
     scores: Mapped[list["EvidenceScore"]] = relationship(back_populates="association", cascade="all, delete-orphan")
+    benchmarks: Mapped[list["ExternalBenchmark"]] = relationship(
+        back_populates="association", cascade="all, delete-orphan"
+    )
 
 
 class Evidence(Base):
@@ -262,6 +279,95 @@ class EvidenceScore(Base):
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     association: Mapped[BiomarkerCancer] = relationship(back_populates="scores")
+
+
+# --------------------------------------------------------------------------- genomic context & external benchmark
+class Cohort(Base):
+    """A genomic profiling cohort (a cBioPortal study) used to compute population-level alteration frequencies.
+
+    A cancer type may need several cohorts: non-small cell lung cancer = TCGA LUAD + TCGA LUSC.
+    """
+
+    __tablename__ = "cohort"
+    __table_args__ = (
+        CheckConstraint("n_samples_mutation IS NULL OR n_samples_mutation >= 0", name="ck_cohort_n_mut"),
+        CheckConstraint("n_samples_cna IS NULL OR n_samples_cna >= 0", name="ck_cohort_n_cna"),
+    )
+
+    cohort_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    study_id: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    cancer_id: Mapped[int] = mapped_column(
+        ForeignKey("cancer.cancer_id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    source_name: Mapped[str] = mapped_column(String(100), nullable=False, default="cBioPortal")
+    n_samples_mutation: Mapped[int | None] = mapped_column(Integer)
+    n_samples_cna: Mapped[int | None] = mapped_column(Integer)
+    citation: Mapped[str | None] = mapped_column(String(200))
+    source_url: Mapped[str | None] = mapped_column(String(300))
+    retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    cancer: Mapped[Cancer] = relationship(back_populates="cohorts")
+    prevalence: Mapped[list["GenomicPrevalence"]] = relationship(back_populates="cohort", cascade="all, delete-orphan")
+
+
+class GenomicPrevalence(Base):
+    """Number of profiled tumours in a cohort with a gene-level alteration (raw counts, never percentages).
+
+    Frequencies are derived at query time (altered / profiled), and pooled across the cohorts of a cancer by
+    summing counts, which keeps the stored data in 3NF and avoids averaging percentages.
+    """
+
+    __tablename__ = "genomic_prevalence"
+    __table_args__ = (
+        UniqueConstraint("gene_id", "cohort_id", "alteration_type", name="uq_prevalence_gene_cohort_type"),
+        CheckConstraint(f"alteration_type IN {sql_in(ALTERATION_TYPES)}", name="ck_alteration_type"),
+        CheckConstraint("altered_cases >= 0", name="ck_altered_nonneg"),
+        CheckConstraint("profiled_cases > 0", name="ck_profiled_pos"),
+        CheckConstraint("altered_cases <= profiled_cases", name="ck_altered_le_profiled"),
+    )
+
+    prevalence_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    gene_id: Mapped[int] = mapped_column(ForeignKey("gene.gene_id", ondelete="CASCADE"), nullable=False, index=True)
+    cohort_id: Mapped[int] = mapped_column(
+        ForeignKey("cohort.cohort_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    alteration_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    altered_cases: Mapped[int] = mapped_column(Integer, nullable=False)
+    profiled_cases: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    gene: Mapped[Gene] = relationship(back_populates="prevalence")
+    cohort: Mapped[Cohort] = relationship(back_populates="prevalence")
+
+
+class ExternalBenchmark(Base):
+    """Expert-curated evidence level from an external knowledge base (CIViC) for the same association.
+
+    Used only to validate the evidence-support score (rank concordance), never to compute it.
+    """
+
+    __tablename__ = "external_benchmark"
+    __table_args__ = (
+        UniqueConstraint("association_id", "benchmark_source", name="uq_benchmark_assoc_source"),
+        CheckConstraint(
+            f"best_evidence_level IS NULL OR best_evidence_level IN {sql_in(CIVIC_EVIDENCE_LEVELS)}",
+            name="ck_benchmark_level",
+        ),
+        CheckConstraint("n_items >= 0 AND n_shared_publications >= 0", name="ck_benchmark_counts"),
+    )
+
+    benchmark_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    association_id: Mapped[int] = mapped_column(
+        ForeignKey("biomarker_cancer.association_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    benchmark_source: Mapped[str] = mapped_column(String(40), nullable=False)
+    best_evidence_level: Mapped[str | None] = mapped_column(String(1))
+    n_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    n_shared_publications: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    matched_on: Mapped[str | None] = mapped_column(Text)
+    retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    association: Mapped["BiomarkerCancer"] = relationship(back_populates="benchmarks")
 
 
 # --------------------------------------------------------------------------- junction tables

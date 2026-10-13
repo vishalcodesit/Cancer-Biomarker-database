@@ -13,6 +13,15 @@ export const CHART = {
   ink: "#0b0b0b",
 };
 
+// Evidence-vs-prevalence quadrants: three categorical slots (blue, orange, aqua; validated all-pairs for a scatter,
+// worst CVD dE 9.2) plus muted grey as the folded fourth group. Position and the legend also carry identity.
+export const QUADRANT_COLORS: Record<string, string> = {
+  established: "#2a78d6",
+  under_curated: "#eb6834",
+  niche_supported: "#1baf7a",
+  rare_thin: "#94a3b8",
+};
+
 export interface Datum {
   label: string;
   value: number;

@@ -4,10 +4,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 
-from app.common import ERROR_RESPONSES, PageParams, bad_request, csv_response, not_found
+from app.common import ERROR_RESPONSES, bad_request, csv_response, not_found
 from app.database import get_db
 from app.scoring import methodology
-from app.services import analytics, gaps, importer, queries as qs, scores
+from app.security import require_admin
+from app.services import analytics, gaps, importer, prevalence, queries as qs, scores
 from app.vocab import BIOMARKER_ROLES, BIOMARKER_TYPES, CONSISTENCY_VALUES, EVIDENCE_TYPES, SOURCE_STATUSES
 
 router = APIRouter(prefix="/api", responses=ERROR_RESPONSES)
@@ -49,8 +50,9 @@ def get_association(association_id: int, db: Session = Depends(get_db)):
     if a is None:
         raise not_found("Association", association_id)
     live = scores.score_association(a)
-    return {**qs.association_dict(a), "score_explanation": live.to_dict(),
-            "gap_analysis": gaps.analyse_association(a)}
+    gap = prevalence.with_curation_priority(db, [gaps.analyse_association(a)])[0]
+    return {**qs.association_dict(a, counts=prevalence.load_counts(db)), "score_explanation": live.to_dict(),
+            "legacy_score_v1_0_0": scores.legacy_score_association(a).overall_score, "gap_analysis": gap}
 
 
 @router.get("/scores/methodology", tags=["Evidence & scores"], summary="Evidence-support scoring method")
@@ -58,10 +60,18 @@ def score_methodology():
     from app.config import get_settings
     s = get_settings()
     return {**methodology(), "weights": scores.weights_from_settings(s).as_dict(),
-            "publication_cap": s.score_publication_cap, "min_coverage": s.score_min_coverage}
+            "publication_cap": s.score_publication_cap, "min_coverage": s.score_min_coverage,
+            "breadth_discount": s.score_breadth_discount}
 
 
-@router.post("/scores/recompute", tags=["Evidence & scores"], summary="Recalculate all stored scores")
+@router.get("/scores/comparison", tags=["Evidence & scores"],
+            summary="Every association scored with the original 1.0.0 method and the current 1.1.0 method")
+def score_comparison(db: Session = Depends(get_db)):
+    return scores.version_comparison(db)
+
+
+@router.post("/scores/recompute", tags=["Evidence & scores"], summary="Recalculate all stored scores",
+             dependencies=[Depends(require_admin)])
 def recompute(db: Session = Depends(get_db)):
     return {"associations_scored": scores.recompute_all(db)}
 
@@ -70,11 +80,15 @@ def recompute(db: Session = Depends(get_db)):
 @router.get("/gaps", tags=["Evidence gaps"], summary="Evidence-gap analysis")
 def get_gaps(cancer_id: int | None = None, role: RoleParam | None = None, flag: GapFlag | None = None,
              min_publications: int = Query(2, ge=1, le=20), min_score: float = Query(50, ge=0, le=100),
-             sort: Literal["gap_count", "overall_score", "n_publications", "n_sources", "name"] = "gap_count",
+             sort: Literal["gap_severity", "curation_priority", "gap_count", "overall_score", "tcga_frequency",
+                           "n_publications", "n_sources", "name"] = "gap_severity",
              order: Literal["asc", "desc"] = "desc", db: Session = Depends(get_db)):
-    all_rows = gaps.gap_analysis(db, cancer_id, role, None, min_publications, min_score, sort, order)
+    all_rows = prevalence.with_curation_priority(db, gaps.gap_analysis(db, cancer_id, role, None, min_publications, min_score))
+    all_rows = gaps.sort_rows(all_rows, sort, order)
     rows = [r for r in all_rows if flag in r["flags"]] if flag else all_rows
     return {"summary": gaps.gap_summary(all_rows), "flag_descriptions": gaps.GAP_FLAGS,
+            "severity": gaps.GAP_SEVERITY, "role_evidence_expectations": gaps.ROLE_EVIDENCE_EXPECTATIONS,
+            "n_associations": qs.count_associations(db, cancer_id, role),
             "total": len(rows), "items": rows}
 
 
@@ -136,10 +150,11 @@ def export(
                          "scoring_version": s.get("scoring_version")})
         return csv_response(rows, "associations_scores.csv")
     if dataset == "gaps":
-        rows = gaps.gap_analysis(db, cancer_id, role, flag)
+        rows = prevalence.with_curation_priority(db, gaps.gap_analysis(db, cancer_id, role, flag))
+        rows = gaps.sort_rows(rows, "curation_priority", "desc")
         cols = ["association_id", "biomarker_code", "biomarker_name", "cancer_name", "biomarker_role",
                 "n_evidence", "n_publications", "n_sources", "overall_score", "score_status",
-                "evidence_coverage", "gap_count", "flags"]
+                "evidence_coverage", "gap_count", "gap_severity", "tcga_frequency", "curation_priority", "flags"]
         return csv_response(rows, "evidence_gaps.csv", cols)
     # analytics
     if not report:
@@ -155,7 +170,7 @@ def export(
 
 # --------------------------------------------------------------------------- import
 @router.post("/import/{entity}", tags=["Import & export"], summary="Validate and import a curated CSV file")
-async def import_csv(entity: str, file: UploadFile = File(...),
+async def import_csv(entity: str, request: Request, file: UploadFile = File(...),
                      dry_run: bool = Query(True, description="Validate only; do not write"),
                      db: Session = Depends(get_db)):
     if entity not in importer.ROW_MODELS:
@@ -169,6 +184,8 @@ async def import_csv(entity: str, file: UploadFile = File(...),
         df = importer.read_csv_bytes(content)
     except importer.ImportError_ as exc:
         raise bad_request(str(exc))
+    if not dry_run:
+        require_admin(request)
     report = importer.import_dataframe(db, entity, df, dry_run=dry_run)
     if report.ok and not dry_run and entity in ("evidence", "evidence_kegg", "associations", "publications"):
         scores.recompute_all(db)
